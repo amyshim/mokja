@@ -52,7 +52,7 @@ const REST_MAP: number[][] = [
   [W,W,W,W,W,W,W,W,W,W,W,W,W,W,W,W], // 15 south wall
 ];
 
-// Table tile definitions: tableId → positions on map
+// Table tile definitions: tableId -> positions on map
 interface TableTileDef {
   tableId: number;
   cols: [number, number];
@@ -79,6 +79,66 @@ const STATION_TILES: StationTileDef[] = [
   { type: 'combine', cols: [11, 12], row: 9 },
 ];
 
+// --- Customer seat positions per table ---
+interface SeatDef {
+  col: number;
+  row: number;
+  facing: Direction;
+}
+
+const TABLE_SEATS: Record<number, SeatDef[]> = {
+  0: [ // 2-seat table at row 1, cols 2-3
+    { col: 2, row: 2, facing: 'up' },
+    { col: 3, row: 2, facing: 'up' },
+  ],
+  1: [ // 4-seat table at row 1, cols 8-9
+    { col: 8, row: 2, facing: 'up' },
+    { col: 9, row: 2, facing: 'up' },
+    { col: 7, row: 1, facing: 'right' },
+    { col: 10, row: 1, facing: 'left' },
+  ],
+  2: [ // 4-seat table at row 3, cols 4-5
+    { col: 4, row: 2, facing: 'down' },
+    { col: 5, row: 2, facing: 'down' },
+    { col: 4, row: 4, facing: 'up' },
+    { col: 5, row: 4, facing: 'up' },
+  ],
+  3: [ // 4-seat table at row 3, cols 9-10
+    { col: 9, row: 4, facing: 'up' },
+    { col: 10, row: 4, facing: 'up' },
+    { col: 8, row: 3, facing: 'right' },
+    { col: 11, row: 3, facing: 'left' },
+  ],
+};
+
+// --- Customer appearance ---
+interface CustomerAppearance {
+  skinColor: number;
+  hairColor: number;
+  shirtColor: number;
+}
+
+const SKIN_TONES = [0xFFDBAC, 0xF1C27D, 0xE0AC69, 0xC68642, 0x8D5524];
+const HAIR_COLORS = [0x2C1B18, 0x4A3728, 0x8B6914, 0x090806, 0xB55239, 0xD4A574];
+const SHIRT_COLORS = [0xFF6B6B, 0x4ECDC4, 0x45B7D1, 0xFFA07A, 0x98D8C8, 0xF7DC6F, 0xBB8FCE, 0x82E0AA, 0x6C5CE7, 0xFD79A8];
+
+const ENTRANCE_COL = 7;
+const ENTRANCE_ROW = 14;
+
+// --- Utility functions ---
+
+function pickRandom<T>(arr: T[]): T {
+  return arr[Math.floor(Math.random() * arr.length)];
+}
+
+function randomAppearance(): CustomerAppearance {
+  return {
+    skinColor: pickRandom(SKIN_TONES),
+    hairColor: pickRandom(HAIR_COLORS),
+    shirtColor: pickRandom(SHIRT_COLORS),
+  };
+}
+
 function getTableIdAt(col: number, row: number): number | null {
   for (const t of TABLE_TILES) {
     if (row === t.row && (col === t.cols[0] || col === t.cols[1])) return t.tableId;
@@ -102,10 +162,52 @@ function isWalkable(col: number, row: number): boolean {
 function tx(col: number): number { return col * TILE + TILE / 2; }
 function ty(row: number): number { return row * TILE + TILE / 2; }
 
+function findPath(startCol: number, startRow: number, endCol: number, endRow: number): { col: number; row: number }[] {
+  if (startCol === endCol && startRow === endRow) return [{ col: startCol, row: startRow }];
+
+  const visited = new Set<string>();
+  const queue: { col: number; row: number; path: { col: number; row: number }[] }[] = [];
+
+  visited.add(`${startCol},${startRow}`);
+  queue.push({ col: startCol, row: startRow, path: [{ col: startCol, row: startRow }] });
+
+  while (queue.length > 0) {
+    const { col, row, path } = queue.shift()!;
+
+    for (const dir of ['up', 'down', 'left', 'right'] as Direction[]) {
+      const { dx, dy } = DIR_DELTA[dir];
+      const nc = col + dx;
+      const nr = row + dy;
+      const key = `${nc},${nr}`;
+
+      if (!visited.has(key) && isWalkable(nc, nr)) {
+        const newPath = [...path, { col: nc, row: nr }];
+        if (nc === endCol && nr === endRow) return newPath;
+        visited.add(key);
+        queue.push({ col: nc, row: nr, path: newPath });
+      }
+    }
+  }
+
+  return [];
+}
+
+// --- Interfaces ---
+
 interface TableIndicator {
   bg: Phaser.GameObjects.Rectangle;
   label: Phaser.GameObjects.Text;
 }
+
+interface MemberAvatar {
+  sprite: Phaser.GameObjects.Image;
+  textureBaseKey: string;
+  seatCol: number;
+  seatRow: number;
+  seatFacing: Direction;
+}
+
+// --- Scene ---
 
 export class ServeScene extends Phaser.Scene {
   // Map
@@ -136,6 +238,9 @@ export class ServeScene extends Phaser.Scene {
   // Customer spawning
   private spawnedCount = 0;
 
+  // Customer avatars
+  private customerAvatars: Map<string, MemberAvatar[]> = new Map();
+
   // HUD
   private hudTitle!: Phaser.GameObjects.Text;
   private hudEarnings!: Phaser.GameObjects.Text;
@@ -164,6 +269,7 @@ export class ServeScene extends Phaser.Scene {
     this.facing = 'up';
     this.spawnedCount = 0;
     this.tableIndicators.clear();
+    this.customerAvatars.clear();
 
     // Reset tables & customers for new service
     for (const table of state.data.restaurant.tables) {
@@ -180,6 +286,19 @@ export class ServeScene extends Phaser.Scene {
 
     // Start spawning customers
     this.scheduleNextSpawn();
+
+    // Cleanup customer textures on shutdown
+    this.events.on('shutdown', () => {
+      for (const [, avatars] of this.customerAvatars) {
+        for (const avatar of avatars) {
+          for (const dir of ['up', 'down', 'left', 'right']) {
+            const key = `${avatar.textureBaseKey}_${dir}`;
+            if (this.textures.exists(key)) this.textures.remove(key);
+          }
+        }
+      }
+      this.customerAvatars.clear();
+    });
   }
 
   update(_time: number, delta: number): void {
@@ -249,15 +368,15 @@ export class ServeScene extends Phaser.Scene {
       }).setOrigin(0.5);
     }
 
-    // Table customer indicators (overlays)
+    // Table customer indicators (overlays) — set high depth so visible above avatars
     for (const t of TABLE_TILES) {
       const midX = (tx(t.cols[0]) + tx(t.cols[1])) / 2;
       const midY = ty(t.row);
 
-      const bg = this.add.rectangle(midX, midY, 40, 16, 0x000000, 0);
+      const bg = this.add.rectangle(midX, midY, 40, 16, 0x000000, 0).setDepth(20);
       const label = this.add.text(midX, midY, '', {
         fontSize: '8px', fontFamily: 'monospace', color: '#FFFFFF',
-      }).setOrigin(0.5);
+      }).setOrigin(0.5).setDepth(21);
 
       this.tableIndicators.set(t.tableId, { bg, label });
     }
@@ -274,9 +393,11 @@ export class ServeScene extends Phaser.Scene {
 
   private createPlayer(): void {
     this.facingHighlight = this.add.rectangle(0, 0, TILE - 2, TILE - 2, 0xFFFF00, 0)
-      .setStrokeStyle(2, 0xFFFF00, 0.6);
+      .setStrokeStyle(2, 0xFFFF00, 0.6)
+      .setDepth(10);
 
-    this.player = this.add.image(tx(this.playerCol), ty(this.playerRow), `player_${this.facing}`);
+    this.player = this.add.image(tx(this.playerCol), ty(this.playerRow), `player_${this.facing}`)
+      .setDepth(11);
     this.updateFacingHighlight();
   }
 
@@ -314,7 +435,7 @@ export class ServeScene extends Phaser.Scene {
         this.isMoving = false;
         this.updateFacingHighlight();
 
-        // Exit tile → close service
+        // Exit tile -> close service
         if (REST_MAP[newRow][newCol] === X) {
           saveGame();
           this.scene.start('Accounting');
@@ -395,6 +516,7 @@ export class ServeScene extends Phaser.Scene {
       } else {
         // No ingredients — customer leaves
         customer.status = 'served';
+        this.startCustomerWalkOut(customer.id);
         ServingSystem.vacateTable(tableId);
         this.showMsg('No ingredients! Customer left.');
         this.checkServiceDone();
@@ -423,6 +545,7 @@ export class ServeScene extends Phaser.Scene {
       if (revenue !== null) {
         const recipe = customer.orderedRecipeId ? RECIPES[customer.orderedRecipeId] : null;
         this.showMsg(`Served ${recipe?.name}! +$${revenue}`);
+        this.startCustomerWalkOut(customer.id);
         ServingSystem.vacateTable(tableId);
         this.updateTableIndicators();
         this.updateHUD();
@@ -596,8 +719,221 @@ export class ServeScene extends Phaser.Scene {
     ServingSystem.seatAtTable(customer.id, tableId);
     this.spawnedCount++;
 
+    // Spawn visual avatars
+    this.spawnCustomerAvatars(customer);
+
     this.updateTableIndicators();
     this.scheduleNextSpawn();
+  }
+
+  // ============================
+  // Customer Avatars
+  // ============================
+
+  private generateCustomerTextures(baseKey: string, appearance: CustomerAppearance): void {
+    const w = 16;
+    const h = 20;
+
+    for (const dir of ['up', 'down', 'left', 'right'] as Direction[]) {
+      const key = `${baseKey}_${dir}`;
+      const gfx = this.make.graphics({ x: 0, y: 0 });
+      gfx.setVisible(false);
+
+      // Body (shirt)
+      gfx.fillStyle(appearance.shirtColor, 1);
+      gfx.fillRoundedRect(1, 1, w, h, 3);
+      gfx.lineStyle(1, 0x000000, 0.3);
+      gfx.strokeRoundedRect(1, 1, w, h, 3);
+
+      // Hair (top portion)
+      gfx.fillStyle(appearance.hairColor, 1);
+      gfx.fillRoundedRect(2, 1, w - 2, 7, 3);
+
+      // Face (skin, visible from front/sides)
+      gfx.fillStyle(appearance.skinColor, 1);
+      switch (dir) {
+        case 'down':
+          gfx.fillRect(4, 7, w - 6, 5);
+          break;
+        case 'up':
+          // Back of head — no face
+          break;
+        case 'left':
+          gfx.fillRect(2, 7, 7, 5);
+          break;
+        case 'right':
+          gfx.fillRect(w - 7, 7, 7, 5);
+          break;
+      }
+
+      // Eyes
+      gfx.fillStyle(0x333333, 1);
+      switch (dir) {
+        case 'down':
+          gfx.fillRect(5, 9, 2, 2);
+          gfx.fillRect(11, 9, 2, 2);
+          break;
+        case 'up':
+          break;
+        case 'left':
+          gfx.fillRect(4, 9, 2, 2);
+          break;
+        case 'right':
+          gfx.fillRect(12, 9, 2, 2);
+          break;
+      }
+
+      gfx.generateTexture(key, w + 2, h + 2);
+      gfx.destroy();
+    }
+  }
+
+  private spawnCustomerAvatars(customer: CustomerData): void {
+    const tableSeats = TABLE_SEATS[customer.tableId];
+    if (!tableSeats) return;
+
+    const numMembers = Math.min(customer.groupSize, tableSeats.length);
+    const avatars: MemberAvatar[] = [];
+
+    for (let i = 0; i < numMembers; i++) {
+      const seat = tableSeats[i];
+      const appearance = randomAppearance();
+      const textureBaseKey = `${customer.id}_m${i}`;
+
+      this.generateCustomerTextures(textureBaseKey, appearance);
+
+      const sprite = this.add.image(tx(ENTRANCE_COL), ty(ENTRANCE_ROW), `${textureBaseKey}_down`)
+        .setDepth(5);
+
+      avatars.push({
+        sprite,
+        textureBaseKey,
+        seatCol: seat.col,
+        seatRow: seat.row,
+        seatFacing: seat.facing,
+      });
+
+      // Animate walk-in with staggered timing
+      const path = findPath(ENTRANCE_COL, ENTRANCE_ROW, seat.col, seat.row);
+      if (path.length > 1) {
+        this.animateWalkPath(sprite, textureBaseKey, path, i * 300, () => {
+          if (sprite.active) sprite.setTexture(`${textureBaseKey}_${seat.facing}`);
+        });
+      } else {
+        sprite.setPosition(tx(seat.col), ty(seat.row));
+        sprite.setTexture(`${textureBaseKey}_${seat.facing}`);
+      }
+    }
+
+    this.customerAvatars.set(customer.id, avatars);
+  }
+
+  private animateWalkPath(
+    sprite: Phaser.GameObjects.Image,
+    textureBaseKey: string,
+    path: { col: number; row: number }[],
+    delay: number,
+    onComplete: () => void,
+  ): void {
+    if (delay > 0) {
+      sprite.setAlpha(0);
+      this.time.delayedCall(delay, () => {
+        if (!sprite.active) return;
+        sprite.setAlpha(1);
+        this.walkStep(sprite, textureBaseKey, path, 1, onComplete);
+      });
+    } else {
+      this.walkStep(sprite, textureBaseKey, path, 1, onComplete);
+    }
+  }
+
+  private walkStep(
+    sprite: Phaser.GameObjects.Image,
+    textureBaseKey: string,
+    path: { col: number; row: number }[],
+    stepIndex: number,
+    onComplete: () => void,
+  ): void {
+    if (!sprite.active) return;
+
+    if (stepIndex >= path.length) {
+      onComplete();
+      return;
+    }
+
+    const target = path[stepIndex];
+    const prev = path[stepIndex - 1];
+
+    // Determine facing direction from movement
+    let dir: Direction = 'down';
+    if (target.col > prev.col) dir = 'right';
+    else if (target.col < prev.col) dir = 'left';
+    else if (target.row < prev.row) dir = 'up';
+
+    sprite.setTexture(`${textureBaseKey}_${dir}`);
+
+    this.tweens.add({
+      targets: sprite,
+      x: tx(target.col),
+      y: ty(target.row),
+      duration: 130,
+      ease: 'Linear',
+      onComplete: () => {
+        this.walkStep(sprite, textureBaseKey, path, stepIndex + 1, onComplete);
+      },
+    });
+  }
+
+  private startCustomerWalkOut(customerId: string): void {
+    const avatars = this.customerAvatars.get(customerId);
+    if (!avatars || avatars.length === 0) {
+      this.customerAvatars.delete(customerId);
+      return;
+    }
+
+    let completedCount = 0;
+    const total = avatars.length;
+
+    avatars.forEach((avatar, i) => {
+      // Stop any in-progress walk-in animation
+      this.tweens.killTweensOf(avatar.sprite);
+
+      // Snap to nearest grid position
+      const currentCol = Math.round((avatar.sprite.x - TILE / 2) / TILE);
+      const currentRow = Math.round((avatar.sprite.y - TILE / 2) / TILE);
+      avatar.sprite.setPosition(tx(currentCol), ty(currentRow));
+      avatar.sprite.setAlpha(1);
+
+      const path = findPath(currentCol, currentRow, ENTRANCE_COL, ENTRANCE_ROW);
+
+      const onDone = () => {
+        if (avatar.sprite.active) avatar.sprite.destroy();
+        completedCount++;
+        if (completedCount === total) {
+          this.cleanupCustomerTextures(customerId);
+        }
+      };
+
+      if (path.length > 1) {
+        this.animateWalkPath(avatar.sprite, avatar.textureBaseKey, path, i * 200, onDone);
+      } else {
+        onDone();
+      }
+    });
+  }
+
+  private cleanupCustomerTextures(customerId: string): void {
+    const avatars = this.customerAvatars.get(customerId);
+    if (!avatars) return;
+
+    for (const avatar of avatars) {
+      for (const dir of ['up', 'down', 'left', 'right']) {
+        const key = `${avatar.textureBaseKey}_${dir}`;
+        if (this.textures.exists(key)) this.textures.remove(key);
+      }
+    }
+
+    this.customerAvatars.delete(customerId);
   }
 
   // ============================

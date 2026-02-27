@@ -220,101 +220,135 @@ Customers arrive dynamically, gated by ingredient availability.
 |----|-------------|
 | R4.2.1 | New customers only spawn when the restaurant has enough ingredients to fulfill at least one menu item |
 | R4.2.2 | Customers are not all generated at once; they arrive dynamically over the course of service |
-| R4.2.3 | Each customer has a unique ID and a random group size |
+| R4.2.3 | Each customer has a unique ID and a random group size (30% solo, 70% group of 2-4) |
 
-### R4.3 Customer Arrival
-Customers trickle in and seat themselves.
+### R4.3 Customer Avatars
+Each customer group member is represented as a distinct on-screen sprite.
 
 | ID | Requirement |
 |----|-------------|
-| R4.3.1 | A new customer auto-seats at an empty clean table 3-5 seconds after one becomes available |
-| R4.3.2 | First customer arrives after a short delay (~500ms) at service start |
-| R4.3.3 | Customers seat themselves at the first available table (no player action required for seating) |
-| R4.3.4 | Table marked as occupied when customer sits |
-| R4.3.5 | No more customers arrive when no menu item can be fulfilled with remaining ingredients |
+| R4.3.1 | Each group member is rendered as an individual avatar sprite |
+| R4.3.2 | Avatars have randomized appearances: skin tone (5 variants), hair color (6 variants), shirt color (10 variants) |
+| R4.3.3 | Avatars have 4 directional textures (up/down/left/right) with visible eyes and hair, matching the player's minimalist style |
+| R4.3.4 | Avatar textures are generated programmatically at spawn time (no external sprite assets) |
+| R4.3.5 | Avatar textures are cleaned up when the customer leaves and on scene shutdown |
 
-### R4.4 Order Flow (3-Tap Interaction)
+### R4.4 Customer Arrival
+Customers walk in from the entrance and seat themselves.
+
+| ID | Requirement |
+|----|-------------|
+| R4.4.1 | A new customer auto-seats at an empty clean table 3-5 seconds after one becomes available |
+| R4.4.2 | First customer arrives after a short delay (~500ms) at service start |
+| R4.4.3 | Customers seat themselves at the first available table (no player action required for seating) |
+| R4.4.4 | Table marked as occupied when customer sits |
+| R4.4.5 | No more customers arrive when no menu item can be fulfilled with remaining ingredients |
+| R4.4.6 | Customer avatars appear at the restaurant entrance (exit tile) and walk along a BFS-computed path to their assigned seat |
+| R4.4.7 | Group members walk in with staggered timing (300ms between each) so they follow single-file |
+| R4.4.8 | Avatars face their movement direction while walking |
+| R4.4.9 | Each table has predefined seat positions on walkable tiles adjacent to the table (2 seats for 2-seat tables, 4 seats for 4-seat tables) |
+| R4.4.10 | When seated, avatars face toward the table center |
+
+### R4.5 Order Flow (3-Tap Interaction)
 Player serves each customer through a 3-tap sequence.
 
 | ID | Requirement |
 |----|-------------|
-| R4.4.1 | **Tap 1 — Take order:** Tap a seated customer's table to take their order |
-| R4.4.2 | Customer orders a random dish from today's menu, filtered to only dishes with enough ingredients |
-| R4.4.3 | Ingredients for the ordered dish are deducted immediately when the order is taken |
-| R4.4.4 | If ingredients run out after a customer is seated but before ordering, the customer leaves (no revenue) |
-| R4.4.5 | Customer status changes from "seated" to "ordered"; table shows dish name |
-| R4.4.6 | **Tap 2 — Start cooking:** Tap the table again to send the order to the kitchen |
-| R4.4.7 | Only one order can cook at a time; tapping another ordered table while kitchen is busy shows "Kitchen is busy" message |
-| R4.4.8 | Customer status changes to "cooking"; table shows "Cooking..." |
-| R4.4.9 | Kitchen station activates: shows dish name, current step, progress bar, and interaction zone |
-| R4.4.10 | **Tap 3 — Serve:** After cooking completes, tap the table to serve the dish |
-| R4.4.11 | Revenue added to wallet and dayResults on serve |
-| R4.4.12 | Customer status changes to "served"; table is vacated and marked dirty |
+| R4.5.1 | **Tap 1 — Take order:** Tap a seated customer's table to take their order |
+| R4.5.2 | Customer orders a random dish from today's menu, filtered to only dishes with enough ingredients |
+| R4.5.3 | Ingredients for the ordered dish are deducted immediately when the order is taken |
+| R4.5.4 | If ingredients run out after a customer is seated but before ordering, the customer leaves (no revenue) and avatars walk out |
+| R4.5.5 | Customer status changes from "seated" to "ordered"; table shows dish name |
+| R4.5.6 | **Tap 2 — Start cooking:** Tap the table again to send the order to the kitchen |
+| R4.5.7 | Only one order can cook at a time; tapping another ordered table while kitchen is busy shows "Kitchen is busy" message |
+| R4.5.8 | Customer status changes to "cooking"; table shows "Cooking..." |
+| R4.5.9 | Kitchen station activates: shows dish name, current step, progress bar, and interaction zone |
+| R4.5.10 | **Tap 3 — Serve:** After cooking completes, tap the table to serve the dish |
+| R4.5.11 | Revenue added to wallet and dayResults on serve |
+| R4.5.12 | Customer status changes to "served"; avatars walk out; table is vacated and marked dirty |
 
-### R4.5 Cooking Mini-Game (Kitchen Station)
+### R4.6 Cooking Mini-Game (Kitchen Station)
 Interactive cooking steps for each order, performed inline during service.
 
 | ID | Requirement |
 |----|-------------|
-| R4.5.1 | Kitchen station shows current recipe name, step label, and progress bar |
-| R4.5.2 | Kitchen station shows interaction zone with step-specific instructions |
-| R4.5.3 | When no order is cooking, kitchen shows "No orders to cook" idle state |
+| R4.6.1 | Kitchen station shows current recipe name, step label, and progress bar |
+| R4.6.2 | Kitchen station shows interaction zone with step-specific instructions |
+| R4.6.3 | When no order is cooking, kitchen shows "No orders to cook" idle state |
 
-### R4.6 Cooking Interaction Types
+### R4.7 Cooking Interaction Types
 
 | ID | Type | Interaction | Completion |
 |----|------|-------------|------------|
-| R4.6.1 | Chop | Tap/click the interaction zone | 5 taps to complete |
-| R4.6.2 | Boil | Hold/press the interaction zone | Hold for step duration |
-| R4.6.3 | Combine | Tap/click the interaction zone | 3 taps to complete |
+| R4.7.1 | Chop | Tap/click the interaction zone | 5 taps to complete |
+| R4.7.2 | Boil | Hold/press the interaction zone | Hold for step duration |
+| R4.7.3 | Combine | Tap/click the interaction zone | 3 taps to complete |
 
-### R4.7 Cooking Recipes (Prep Steps)
+### R4.8 Cooking Recipes (Prep Steps)
 
 | ID | Recipe | Steps |
 |----|--------|-------|
-| R4.7.1 | Kimchi | Chop cabbage (2s) → Combine with pepper flakes & salt (2s) |
-| R4.7.2 | Kimchi Stew | Chop cabbage (2s) → Boil stew (3s) → Add pepper & season (2s) |
-| R4.7.3 | Kimchi Fried Rice | Chop kimchi (2s) → Fry rice with kimchi (3s) |
-| R4.7.4 | Roasted Rice Tea | Roast & steep rice (3s) |
+| R4.8.1 | Kimchi | Chop cabbage (2s) → Combine with pepper flakes & salt (2s) |
+| R4.8.2 | Kimchi Stew | Chop cabbage (2s) → Boil stew (3s) → Add pepper & season (2s) |
+| R4.8.3 | Kimchi Fried Rice | Chop kimchi (2s) → Fry rice with kimchi (3s) |
+| R4.8.4 | Roasted Rice Tea | Roast & steep rice (3s) |
 
-### R4.8 Table Turnover
-Tables need cleaning between customers.
+### R4.9 Customer Departure & Table Turnover
+Customers walk out after being served; tables need cleaning between customers.
 
 | ID | Requirement |
 |----|-------------|
-| R4.8.1 | After customer is served and leaves, table becomes dirty |
-| R4.8.2 | Tap a dirty table to clean it |
-| R4.8.3 | Cleaned table becomes available; triggers next customer arrival (3-5s delay) |
-| R4.8.4 | Cannot take orders at or seat customers at a dirty table |
+| R4.9.1 | After being served, customer avatars walk from their seats back to the entrance and are destroyed on arrival |
+| R4.9.2 | Walk-out uses staggered timing (200ms between group members) |
+| R4.9.3 | If a walk-out is triggered while avatars are still walking in, in-progress tweens are killed and walk-out starts from the avatar's current grid position |
+| R4.9.4 | After customer leaves, table becomes dirty |
+| R4.9.5 | Tap a dirty table to clean it |
+| R4.9.6 | Cleaned table becomes available; triggers next customer arrival (3-5s delay) |
+| R4.9.7 | Cannot take orders at or seat customers at a dirty table |
 
-### R4.9 Service Completion
+### R4.10 Depth & Render Order
+Sprites are layered for correct visual overlap.
+
+| ID | Requirement |
+|----|-------------|
+| R4.10.1 | Customer avatar sprites render above floor tiles (depth 5) |
+| R4.10.2 | Player sprite renders above customer avatars (depth 11) |
+| R4.10.3 | Facing highlight renders below the player (depth 10) |
+| R4.10.4 | Table indicators render above all sprites (depth 20+) |
+
+### R4.11 Service Completion
 End the service day.
 
 | ID | Requirement |
 |----|-------------|
-| R4.9.1 | "Close Service" button is always visible and interactive |
-| R4.9.2 | When all customers are served and all tables are clean, info text prompts to close service |
-| R4.9.3 | Transitions to Accounting scene |
-| R4.9.4 | Game state saved on transition |
+| R4.11.1 | "Close Service" button is always visible and interactive |
+| R4.11.2 | When all customers are served and all tables are clean, info text prompts to close service |
+| R4.11.3 | Transitions to Accounting scene |
+| R4.11.4 | Game state saved on transition |
 
 #### Test Cases
 
 | TC | Steps | Expected Result |
 |----|-------|-----------------|
-| TC-4.1 | Enter Serve scene with Kimchi and Rice Tea on menu | 4 tables shown; customers begin arriving and auto-seating after ~500ms |
-| TC-4.2 | Wait for customer to seat, tap their table | Order taken; table shows dish name; ingredients deducted from inventory |
-| TC-4.3 | Tap ordered table | Cooking starts in kitchen station; table shows "Cooking..." |
-| TC-4.4 | Tap another ordered table while kitchen is busy | "Kitchen is busy" message shown; no cooking starts |
-| TC-4.5 | Complete cooking (chop: 5 taps), tap table | Customer served; revenue added; table becomes dirty |
-| TC-4.6 | Complete a Boil step (hold interaction zone for 3s) | Progress bar fills during hold; step completes when full |
-| TC-4.7 | Release during Boil step before complete | Progress pauses; resumes on next hold |
-| TC-4.8 | Tap dirty table | Table cleaned; new customer arrives after 3-5s |
-| TC-4.9 | Serve all customers, clean all tables | Info text: "All customers served! Close service to see results." |
-| TC-4.10 | Click "Close Service" mid-service | Transitions to Accounting with partial results |
-| TC-4.11 | Click "Close Service" after all served | Transitions to Accounting; state saved |
-| TC-4.12 | Ingredients run out before next customer spawns | No more customers arrive; service can be closed |
-| TC-4.13 | Customer seated, then tap table when no ingredients can fulfill any order | Customer leaves; table marked dirty; info text shows "No ingredients left!" |
-| TC-4.14 | Check wallet after serving Kimchi ($8) | Wallet += $8 |
+| TC-4.1 | Enter Serve scene with Kimchi and Rice Tea on menu | 4 tables shown; customers begin arriving after ~500ms |
+| TC-4.2 | Observe first customer group spawn | Individual avatars appear at entrance and walk single-file to their table seats with staggered timing |
+| TC-4.3 | Observe seated customers | Each group member sits at a distinct seat adjacent to the table, facing toward the table |
+| TC-4.4 | Observe multiple customer groups | Each avatar has distinct randomized colors (skin, hair, shirt) |
+| TC-4.5 | Wait for customer to seat, tap their table | Order taken; table shows dish name; ingredients deducted from inventory |
+| TC-4.6 | Tap ordered table | Cooking starts in kitchen station; table shows "Cooking..." |
+| TC-4.7 | Tap another ordered table while kitchen is busy | "Kitchen is busy" message shown; no cooking starts |
+| TC-4.8 | Complete cooking (chop: 5 taps), tap table | Customer served; avatars walk back to entrance and disappear; revenue added; table becomes dirty |
+| TC-4.9 | Complete a Boil step (hold interaction zone for 3s) | Progress bar fills during hold; step completes when full |
+| TC-4.10 | Release during Boil step before complete | Progress pauses; resumes on next hold |
+| TC-4.11 | Tap dirty table | Table cleaned; new customer arrives after 3-5s |
+| TC-4.12 | Serve all customers, clean all tables | Info text: "All customers served! Close service to see results." |
+| TC-4.13 | Click "Close Service" mid-service | Transitions to Accounting with partial results |
+| TC-4.14 | Click "Close Service" after all served | Transitions to Accounting; state saved |
+| TC-4.15 | Ingredients run out before next customer spawns | No more customers arrive; service can be closed |
+| TC-4.16 | Customer seated, then tap table when no ingredients can fulfill any order | Customer avatars walk out; table marked dirty; info text shows "No ingredients left!" |
+| TC-4.17 | Check wallet after serving Kimchi ($8) | Wallet += $8 |
+| TC-4.18 | Observe player walking through a customer avatar tile | Player renders above customer sprite; no collision or blocking |
+| TC-4.19 | Exit scene (walk to EXIT) while customers are mid-walk | Scene shuts down cleanly; all avatar textures cleaned up |
 
 ---
 

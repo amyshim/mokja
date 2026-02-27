@@ -41,9 +41,12 @@ In the **menu setting** phase:
 In the **serving** phase:
 
 * The player opens the restaurant with 4 tables (1x 2-seat, 3x 4-seat)
+* Customers are represented as individual avatar sprites with randomized appearances (skin tone, hair color, shirt color). Each group member is a distinct avatar
+* Customers walk in from the restaurant entrance to their assigned seats using grid-based pathfinding, with staggered timing so group members follow each other single-file
 * Customers arrive and seat themselves at empty clean tables, trickling in dynamically (a new customer arrives 3-5 seconds after a table becomes available)
 * New customers only arrive when the restaurant has enough ingredients to fulfill at least one menu item
 * The player takes the customer's order. Customers order from the menu. Customers can only order food that the restaurant has enough ingredients to fulfill. If ingredients run out after a customer is seated but before ordering, the customer leaves
+* After being served (or leaving), customer avatars walk back to the entrance and exit the restaurant
 * Only one order can be cooked at a time in the kitchen
 * After the player takes a customer's order, they cook the order. All food is made-to-order.
 * Each recipe has specific prep steps:
@@ -69,10 +72,12 @@ This concludes the day's tasks and can be repeated the following day
 **Adding new recipes**  
 As players level up, they can obtain additional crop species that enable more recipes
 
-**Art and Aesthetic**  
+**Art and Aesthetic**
 The look and feel of the game will be relaxed, calm, simple, and nature-inspired. MVP will be pixelated art similar to the original Pokemon gameboy series. Buildings will be made of wood, crop areas will be green, and the sky will be a peaceful blue.
 
-Players will move a 2D avatar on screen and in order to farm and serve food, similar to Pokemon Emerald.
+Players will move a 2D avatar on screen and in order to farm and serve food, similar to Pokemon Emerald. All art is generated programmatically (colored rounded rectangles with details) — no external sprite sheets or image files.
+
+Customer avatars are procedurally generated with randomized features drawn from pools of 5 skin tones, 6 hair colors, and 10 shirt colors. Each avatar has 4 directional sprites (up/down/left/right) with visible eyes and hair, matching the player character's minimalist style.
 
 **Platform**
 Launch as browser game – no installs, no friction, highest reach
