@@ -1,4 +1,4 @@
-export type PrepStepType = 'chop' | 'boil' | 'combine';
+export type PrepStepType = 'roast' | 'boil' | 'fill' | 'wash';
 
 export interface PrepStep {
   type: PrepStepType;
@@ -12,60 +12,37 @@ export interface RecipeDef {
   ingredients: { cropId: string; quantity: number }[];
   profitPerServing: number;
   prepSteps: PrepStep[];
+  servingsPerBatch?: number; // how many servings one cook yields (default 1)
+  iconColor: number; // color for order indicator icon
 }
 
 export const RECIPES: Record<string, RecipeDef> = {
-  kimchi: {
-    id: 'kimchi',
-    name: 'Kimchi',
-    ingredients: [
-      { cropId: 'cabbage', quantity: 2 },
-      { cropId: 'pepper', quantity: 1 },
-    ],
-    profitPerServing: 8,
+  barley_tea: {
+    id: 'barley_tea',
+    name: 'Barley Tea',
+    ingredients: [{ cropId: 'barley', quantity: 1 }],
+    profitPerServing: 2,
     prepSteps: [
-      { type: 'chop', label: 'Chop cabbage', duration: 2 },
-      { type: 'combine', label: 'Mix with pepper flakes & salt', duration: 2 },
+      { type: 'roast', label: 'Roast barley in oven', duration: 5 },
+      { type: 'boil', label: 'Boil at stove', duration: 3 },
+      { type: 'fill', label: 'Fill cup from stove', duration: 0 },
     ],
+    iconColor: 0xC8A960, // warm brown for tea
   },
-  kimchi_stew: {
-    id: 'kimchi_stew',
-    name: 'Kimchi Stew',
+  barley_rice: {
+    id: 'barley_rice',
+    name: 'Barley Rice',
     ingredients: [
-      { cropId: 'cabbage', quantity: 3 },
-      { cropId: 'pepper', quantity: 1 },
-    ],
-    profitPerServing: 12,
-    prepSteps: [
-      { type: 'chop', label: 'Chop cabbage', duration: 2 },
-      { type: 'boil', label: 'Boil stew', duration: 3 },
-      { type: 'combine', label: 'Add pepper & season', duration: 2 },
-    ],
-  },
-  kimchi_fried_rice: {
-    id: 'kimchi_fried_rice',
-    name: 'Kimchi Fried Rice',
-    ingredients: [
-      { cropId: 'cabbage', quantity: 1 },
-      { cropId: 'pepper', quantity: 1 },
-      { cropId: 'rice', quantity: 2 },
-    ],
-    profitPerServing: 10,
-    prepSteps: [
-      { type: 'chop', label: 'Chop kimchi', duration: 2 },
-      { type: 'combine', label: 'Fry rice with kimchi', duration: 3 },
-    ],
-  },
-  roasted_rice_tea: {
-    id: 'roasted_rice_tea',
-    name: 'Roasted Rice Tea',
-    ingredients: [
+      { cropId: 'barley', quantity: 1 },
       { cropId: 'rice', quantity: 1 },
     ],
-    profitPerServing: 5,
+    profitPerServing: 3,
     prepSteps: [
-      { type: 'boil', label: 'Roast & steep rice', duration: 3 },
+      { type: 'wash', label: 'Wash rice at sink', duration: 3 },
+      { type: 'boil', label: 'Boil with barley at stove', duration: 3 },
     ],
+    servingsPerBatch: 5,
+    iconColor: 0xC4956A, // warm golden brown for barley rice
   },
 };
 

@@ -43,11 +43,13 @@ export class MenuScene extends Phaser.Scene {
       fontSize: '10px', fontFamily: 'monospace', color: '#9A8B7A',
     }).setOrigin(0.5, 0);
 
-    // Recipe rows
+    // Recipe rows (only show unlocked recipes)
     const startY = 95;
     const rowH = 90;
 
-    RECIPE_IDS.forEach((id, i) => {
+    const unlockedIds = RECIPE_IDS.filter(id => state.isRecipeUnlocked(id));
+
+    unlockedIds.forEach((id, i) => {
       const recipe = RECIPES[id];
       const y = startY + i * (rowH + 8);
 
@@ -124,7 +126,9 @@ export class MenuScene extends Phaser.Scene {
   }
 
   private updateVisuals(): void {
-    RECIPE_IDS.forEach(id => {
+    const state = GameState.getInstance();
+    const unlockedIds = RECIPE_IDS.filter(id => state.isRecipeUnlocked(id));
+    unlockedIds.forEach(id => {
       const indicator = this.toggleIndicators.get(id);
       const cardBg = this.cardBgs.get(id);
       const selected = this.selectedRecipes.has(id);

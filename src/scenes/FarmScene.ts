@@ -2,11 +2,11 @@ import Phaser from 'phaser';
 import GameState from '../state/GameState';
 import { FarmSystem } from '../systems/FarmSystem';
 import { TimeSystem } from '../systems/TimeSystem';
-import { CROPS, CROP_IDS } from '../config/crops';
+import { CROPS } from '../config/crops';
 import { saveGame } from '../state/persistence';
 
 // --- Tile grid constants ---
-const TILE = 25;
+const TILE = 32;
 const COLS = 16;
 const ROWS = 16;
 
@@ -98,13 +98,14 @@ export class FarmScene extends Phaser.Scene {
 
   // Game mode
   private mode: 'plant' | 'water' | 'harvest' = 'plant';
-  private selectedCropIdx = 0;
+
+  // Selected crop for planting
+  private selectedCropId: string = 'barley';
 
   // HUD elements
   private hudDay!: Phaser.GameObjects.Text;
   private hudWallet!: Phaser.GameObjects.Text;
   private hudMode!: Phaser.GameObjects.Text;
-  private hudCrop!: Phaser.GameObjects.Text;
   private hudInv!: Phaser.GameObjects.Text;
   private hudPrompt!: Phaser.GameObjects.Text;
   private hudMsg!: Phaser.GameObjects.Text;
@@ -124,7 +125,6 @@ export class FarmScene extends Phaser.Scene {
     this.playerRow = 11;
     this.facing = 'up';
     this.mode = 'plant';
-    this.selectedCropIdx = 0;
     this.cropOverlays.clear();
 
     this.setupInput();
@@ -164,14 +164,12 @@ export class FarmScene extends Phaser.Scene {
     this.input.keyboard!.addKey('TWO').on('down', () => { this.mode = 'water'; this.updateHUD(); });
     this.input.keyboard!.addKey('THREE').on('down', () => { this.mode = 'harvest'; this.updateHUD(); });
 
-    // Crop cycling: Q / E
+    // Cycle crop selection with Q
     this.input.keyboard!.addKey('Q').on('down', () => {
-      this.selectedCropIdx = (this.selectedCropIdx - 1 + CROP_IDS.length) % CROP_IDS.length;
-      this.updateHUD();
-    });
-    this.input.keyboard!.addKey('E').on('down', () => {
-      this.selectedCropIdx = (this.selectedCropIdx + 1) % CROP_IDS.length;
-      this.updateHUD();
+      if (this.mode === 'plant') {
+        this.cycleCrop();
+        this.updateHUD();
+      }
     });
 
     // Dev: 0 to skip a day
@@ -310,11 +308,17 @@ export class FarmScene extends Phaser.Scene {
     }
   }
 
+  private cycleCrop(): void {
+    const state = GameState.getInstance();
+    const unlocked = state.data.unlockedCrops;
+    const idx = unlocked.indexOf(this.selectedCropId);
+    this.selectedCropId = unlocked[(idx + 1) % unlocked.length];
+  }
+
   private interactPlot(idx: number): void {
     if (this.mode === 'plant') {
-      const cropId = CROP_IDS[this.selectedCropIdx];
-      if (FarmSystem.plant(idx, cropId)) {
-        this.showMsg(`Planted ${CROPS[cropId].name}`);
+      if (FarmSystem.plant(idx, this.selectedCropId)) {
+        this.showMsg(`Planted ${CROPS[this.selectedCropId]?.name}`);
       } else {
         this.showMsg('Plot occupied');
       }
@@ -381,19 +385,15 @@ export class FarmScene extends Phaser.Scene {
 
   private cropColor(id: string): number {
     switch (id) {
-      case 'cabbage': return 0x4CAF50;
-      case 'pepper': return 0xF44336;
-      case 'rice': return 0xFFF8DC;
-      default: return 0xCCCCCC;
+      case 'rice': return 0xF5F5DC;
+      default: return 0xC8A960; // barley
     }
   }
 
   private seedColor(id: string): number {
     switch (id) {
-      case 'cabbage': return 0x90EE90;
-      case 'pepper': return 0xFFA07A;
-      case 'rice': return 0xF5F5DC;
-      default: return 0xCCCCCC;
+      case 'rice': return 0xB8D4B8;
+      default: return 0xD4AA70; // barley seed
     }
   }
 
@@ -403,8 +403,8 @@ export class FarmScene extends Phaser.Scene {
 
   private createHUD(): void {
     const w = this.cameras.main.width;
-    const panelY = ROWS * TILE; // 400
-    const panelH = this.cameras.main.height - panelY; // 200
+    const panelY = ROWS * TILE;
+    const panelH = this.cameras.main.height - panelY;
 
     // Background
     this.add.rectangle(w / 2, panelY + panelH / 2, w, panelH, 0x1a1a2e);
@@ -423,24 +423,19 @@ export class FarmScene extends Phaser.Scene {
       fontSize: '13px', fontFamily: 'monospace', color: '#aaaaaa',
     });
 
-    // Row 3: Crop selection
-    this.hudCrop = this.add.text(10, panelY + 52, '', {
-      fontSize: '13px', fontFamily: 'monospace', color: '#aaaaaa',
-    });
-
-    // Row 4: Inventory
-    this.hudInv = this.add.text(10, panelY + 74, '', {
+    // Row 3: Inventory
+    this.hudInv = this.add.text(10, panelY + 52, '', {
       fontSize: '11px', fontFamily: 'monospace', color: '#cccccc',
       wordWrap: { width: w - 20 },
     });
 
-    // Row 5: Context prompt
-    this.hudPrompt = this.add.text(w / 2, panelY + 115, '', {
+    // Row 4: Context prompt
+    this.hudPrompt = this.add.text(w / 2, panelY + 95, '', {
       fontSize: '14px', fontFamily: 'monospace', color: '#FFD700',
     }).setOrigin(0.5);
 
-    // Row 6: Action message
-    this.hudMsg = this.add.text(w / 2, panelY + 140, '', {
+    // Row 5: Action message
+    this.hudMsg = this.add.text(w / 2, panelY + 120, '', {
       fontSize: '13px', fontFamily: 'monospace', color: '#4CAF50',
     }).setOrigin(0.5);
 
@@ -448,7 +443,7 @@ export class FarmScene extends Phaser.Scene {
     this.add.text(w / 2, panelY + 168, 'Arrows/WASD: Move | Space: Act', {
       fontSize: '9px', fontFamily: 'monospace', color: '#555555',
     }).setOrigin(0.5);
-    this.add.text(w / 2, panelY + 182, '1/2/3: Mode | Q/E: Crop | 0: Dev', {
+    this.add.text(w / 2, panelY + 182, '1/2/3: Mode | 0: Dev skip day', {
       fontSize: '9px', fontFamily: 'monospace', color: '#555555',
     }).setOrigin(0.5);
   }
@@ -459,15 +454,16 @@ export class FarmScene extends Phaser.Scene {
     this.hudDay.setText(`Day ${state.data.day}`);
     this.hudWallet.setText(`$${state.data.wallet}`);
 
+    const cropName = CROPS[this.selectedCropId]?.name || this.selectedCropId;
+    const plantLabel = state.data.unlockedCrops.length > 1
+      ? `1:[PLANT ${cropName}] Q:Switch`
+      : `1:[PLANT]`;
     const modes: Record<string, string> = {
-      plant:   '1:[PLANT]  2:Water  3:Harvest',
+      plant:   `${plantLabel}  2:Water  3:Harvest`,
       water:   '1:Plant  2:[WATER]  3:Harvest',
       harvest: '1:Plant  2:Water  3:[HARVEST]',
     };
     this.hudMode.setText(modes[this.mode]);
-
-    const cropId = CROP_IDS[this.selectedCropIdx];
-    this.hudCrop.setText(`Crop: Q< ${CROPS[cropId].name} >E`);
 
     const inv = state.data.inventory;
     const lines = Object.entries(inv)
@@ -493,9 +489,8 @@ export class FarmScene extends Phaser.Scene {
       const idx = getPlotIndex(fc, fr);
       if (idx !== null) {
         const status = FarmSystem.getPlotStatus(idx);
-        const cropName = CROPS[CROP_IDS[this.selectedCropIdx]].name;
-
         if (this.mode === 'plant' && status === 'empty') {
+          const cropName = CROPS[this.selectedCropId]?.name || 'crop';
           this.hudPrompt.setText(`[Space] Plant ${cropName}`);
         } else if (this.mode === 'water' && status === 'growing') {
           this.hudPrompt.setText('[Space] Water');

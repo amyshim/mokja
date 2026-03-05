@@ -62,6 +62,20 @@ function migrateState(saved: any): void {
       dirty: false,
     }));
   }
+
+  // Milestone system fields (v3)
+  if (saved.totalTeasServed === undefined) {
+    saved.totalTeasServed = 0;
+  }
+  if (!saved.milestones) {
+    saved.milestones = { firstMilestone: false };
+  }
+  if (!saved.unlockedCrops) {
+    saved.unlockedCrops = ['barley'];
+  }
+  if (!saved.unlockedRecipes) {
+    saved.unlockedRecipes = ['barley_tea'];
+  }
 }
 
 export function hasSave(): boolean {

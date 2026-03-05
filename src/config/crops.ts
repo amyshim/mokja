@@ -8,28 +8,20 @@ export interface CropDef {
 }
 
 export const CROPS: Record<string, CropDef> = {
-  cabbage: {
-    id: 'cabbage',
-    name: 'Napa Cabbage',
+  barley: {
+    id: 'barley',
+    name: 'Barley',
     growthDays: 1,
     baseYield: 2,
     wateredYield: 4,
-    sprite: 'crop_cabbage',
-  },
-  pepper: {
-    id: 'pepper',
-    name: 'Red Pepper',
-    growthDays: 1,
-    baseYield: 2,
-    wateredYield: 4,
-    sprite: 'crop_pepper',
+    sprite: 'crop_barley',
   },
   rice: {
     id: 'rice',
     name: 'Rice',
     growthDays: 1,
-    baseYield: 3,
-    wateredYield: 6,
+    baseYield: 2,
+    wateredYield: 4,
     sprite: 'crop_rice',
   },
 };
