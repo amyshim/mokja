@@ -6,7 +6,7 @@ import { CROPS } from '../config/crops';
 import { saveGame } from '../state/persistence';
 
 // --- Tile grid constants ---
-const TILE = 32;
+const TILE = 48;
 const COLS = 16;
 const ROWS = 16;
 
@@ -209,7 +209,7 @@ export class FarmScene extends Phaser.Scene {
         if (t === P) {
           const plotIdx = getPlotIndex(col, row);
           if (plotIdx !== null) {
-            const overlay = this.add.rectangle(cx, cy, 15, 15, 0x000000, 0);
+            const overlay = this.add.rectangle(cx, cy, 23, 23, 0x000000, 0);
             this.cropOverlays.set(plotIdx, overlay);
           }
         }
@@ -217,8 +217,8 @@ export class FarmScene extends Phaser.Scene {
     }
 
     // Exit label on the map
-    this.add.text(tx(7), ty(14) + 1, 'EXIT', {
-      fontSize: '7px', fontFamily: 'monospace', color: '#4A3728',
+    this.add.text(tx(7), ty(14) + 2, 'EXIT', {
+      fontSize: '11px', fontFamily: 'monospace', color: '#4A3728',
     }).setOrigin(0.5);
   }
 
@@ -227,8 +227,8 @@ export class FarmScene extends Phaser.Scene {
   // ============================
 
   private createPlayer(): void {
-    this.facingHighlight = this.add.rectangle(0, 0, TILE - 2, TILE - 2, 0xFFFF00, 0)
-      .setStrokeStyle(2, 0xFFFF00, 0.6);
+    this.facingHighlight = this.add.rectangle(0, 0, TILE - 3, TILE - 3, 0xFFFF00, 0)
+      .setStrokeStyle(3, 0xFFFF00, 0.6);
 
     this.player = this.add.image(tx(this.playerCol), ty(this.playerRow), `player_${this.facing}`);
     this.updateFacingHighlight();
@@ -370,15 +370,15 @@ export class FarmScene extends Phaser.Scene {
       } else if (plot.ready) {
         tileImg.setTexture(plot.wateredToday ? 'tile_dirt_wet' : 'tile_dirt');
         overlay.setFillStyle(this.cropColor(plot.cropId), 1);
-        overlay.setSize(16, 16);
+        overlay.setSize(24, 24);
       } else if (plot.wateredToday) {
         tileImg.setTexture('tile_dirt_wet');
         overlay.setFillStyle(this.seedColor(plot.cropId), 1);
-        overlay.setSize(10, 10);
+        overlay.setSize(15, 15);
       } else {
         tileImg.setTexture('tile_dirt');
         overlay.setFillStyle(this.seedColor(plot.cropId), 1);
-        overlay.setSize(8, 8);
+        overlay.setSize(12, 12);
       }
     }
   }
@@ -408,43 +408,43 @@ export class FarmScene extends Phaser.Scene {
 
     // Background
     this.add.rectangle(w / 2, panelY + panelH / 2, w, panelH, 0x1a1a2e);
-    this.add.rectangle(w / 2, panelY, w, 2, 0x333355);
+    this.add.rectangle(w / 2, panelY, w, 3, 0x333355);
 
     // Row 1: Day + Wallet
-    this.hudDay = this.add.text(10, panelY + 10, '', {
-      fontSize: '14px', fontFamily: 'monospace', color: '#ffffff',
+    this.hudDay = this.add.text(15, panelY + 15, '', {
+      fontSize: '21px', fontFamily: 'monospace', color: '#ffffff',
     });
-    this.hudWallet = this.add.text(w - 10, panelY + 10, '', {
-      fontSize: '14px', fontFamily: 'monospace', color: '#FFD700',
+    this.hudWallet = this.add.text(w - 15, panelY + 15, '', {
+      fontSize: '21px', fontFamily: 'monospace', color: '#FFD700',
     }).setOrigin(1, 0);
 
     // Row 2: Mode
-    this.hudMode = this.add.text(10, panelY + 32, '', {
-      fontSize: '13px', fontFamily: 'monospace', color: '#aaaaaa',
+    this.hudMode = this.add.text(15, panelY + 48, '', {
+      fontSize: '20px', fontFamily: 'monospace', color: '#aaaaaa',
     });
 
     // Row 3: Inventory
-    this.hudInv = this.add.text(10, panelY + 52, '', {
-      fontSize: '11px', fontFamily: 'monospace', color: '#cccccc',
-      wordWrap: { width: w - 20 },
+    this.hudInv = this.add.text(15, panelY + 78, '', {
+      fontSize: '17px', fontFamily: 'monospace', color: '#cccccc',
+      wordWrap: { width: w - 30 },
     });
 
     // Row 4: Context prompt
-    this.hudPrompt = this.add.text(w / 2, panelY + 95, '', {
-      fontSize: '14px', fontFamily: 'monospace', color: '#FFD700',
+    this.hudPrompt = this.add.text(w / 2, panelY + 143, '', {
+      fontSize: '21px', fontFamily: 'monospace', color: '#FFD700',
     }).setOrigin(0.5);
 
     // Row 5: Action message
-    this.hudMsg = this.add.text(w / 2, panelY + 120, '', {
-      fontSize: '13px', fontFamily: 'monospace', color: '#4CAF50',
+    this.hudMsg = this.add.text(w / 2, panelY + 180, '', {
+      fontSize: '20px', fontFamily: 'monospace', color: '#4CAF50',
     }).setOrigin(0.5);
 
     // Controls hint
-    this.add.text(w / 2, panelY + 168, 'Arrows/WASD: Move | Space: Act', {
-      fontSize: '9px', fontFamily: 'monospace', color: '#555555',
+    this.add.text(w / 2, panelY + 222, 'Arrows/WASD: Move | Space: Act', {
+      fontSize: '14px', fontFamily: 'monospace', color: '#555555',
     }).setOrigin(0.5);
-    this.add.text(w / 2, panelY + 182, '1/2/3: Mode | 0: Dev skip day', {
-      fontSize: '9px', fontFamily: 'monospace', color: '#555555',
+    this.add.text(w / 2, panelY + 243, '1/2/3: Mode | 0: Dev skip day', {
+      fontSize: '14px', fontFamily: 'monospace', color: '#555555',
     }).setOrigin(0.5);
   }
 

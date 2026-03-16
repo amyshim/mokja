@@ -23,57 +23,57 @@ export class AccountingScene extends Phaser.Scene {
     this.milestoneReached = state.checkMilestones();
 
     // Header
-    this.add.text(w / 2, 40, `Day ${state.data.day} — Results`, {
-      fontSize: '24px', fontFamily: 'monospace', color: '#4A3728',
+    this.add.text(w / 2, 60, `Day ${state.data.day} — Results`, {
+      fontSize: '36px', fontFamily: 'monospace', color: '#4A3728',
     }).setOrigin(0.5);
 
     // Divider
-    this.add.rectangle(w / 2, 70, 200, 2, 0xC4A882);
+    this.add.rectangle(w / 2, 105, 300, 3, 0xC4A882);
 
     // Earnings breakdown
     const centerX = w / 2;
-    let y = 100;
-    const lineH = 35;
+    let y = 150;
+    const lineH = 53;
 
     this.add.text(centerX, y, 'Customers Served', {
-      fontSize: '14px', fontFamily: 'monospace', color: '#7A6B5A',
+      fontSize: '21px', fontFamily: 'monospace', color: '#7A6B5A',
     }).setOrigin(0.5);
-    y += 22;
+    y += 33;
     this.add.text(centerX, y, `${results.customersServed}`, {
-      fontSize: '28px', fontFamily: 'monospace', color: '#4A3728',
+      fontSize: '42px', fontFamily: 'monospace', color: '#4A3728',
     }).setOrigin(0.5);
 
-    y += lineH + 10;
+    y += lineH + 15;
     this.add.text(centerX, y, 'Revenue', {
-      fontSize: '14px', fontFamily: 'monospace', color: '#7A6B5A',
+      fontSize: '21px', fontFamily: 'monospace', color: '#7A6B5A',
     }).setOrigin(0.5);
-    y += 22;
+    y += 33;
     this.add.text(centerX, y, `$${results.revenue}`, {
-      fontSize: '28px', fontFamily: 'monospace', color: '#5A7A4A',
+      fontSize: '42px', fontFamily: 'monospace', color: '#5A7A4A',
     }).setOrigin(0.5);
 
-    y += lineH + 15;
-    this.add.rectangle(centerX, y, 200, 2, 0xC4A882);
+    y += lineH + 23;
+    this.add.rectangle(centerX, y, 300, 3, 0xC4A882);
 
-    y += 20;
+    y += 30;
     this.add.text(centerX, y, 'Total Earnings', {
-      fontSize: '14px', fontFamily: 'monospace', color: '#7A6B5A',
+      fontSize: '21px', fontFamily: 'monospace', color: '#7A6B5A',
     }).setOrigin(0.5);
-    y += 22;
+    y += 33;
     this.add.text(centerX, y, `$${results.revenue}`, {
-      fontSize: '36px', fontFamily: 'monospace', color: '#8B6914',
+      fontSize: '54px', fontFamily: 'monospace', color: '#8B6914',
     }).setOrigin(0.5);
 
-    y += lineH + 15;
+    y += lineH + 23;
     this.add.text(centerX, y, `Wallet: $${state.data.wallet}`, {
-      fontSize: '16px', fontFamily: 'monospace', color: '#9A8B7A',
+      fontSize: '24px', fontFamily: 'monospace', color: '#9A8B7A',
     }).setOrigin(0.5);
 
     // Tea progress (show how many teas served toward milestone)
     if (!state.data.milestones.firstMilestone || this.milestoneReached) {
-      y += 30;
+      y += 45;
       this.add.text(centerX, y, `Barley Teas Served: ${state.data.totalTeasServed}/10`, {
-        fontSize: '12px', fontFamily: 'monospace', color: '#7A6B5A',
+        fontSize: '18px', fontFamily: 'monospace', color: '#7A6B5A',
       }).setOrigin(0.5);
     }
 
@@ -93,63 +93,63 @@ export class AccountingScene extends Phaser.Scene {
     const overlay = this.add.rectangle(w / 2, h / 2, w, h, 0x000000, 0.5).setDepth(100);
 
     // Popup background
-    const popW = 380;
-    const popH = 320;
+    const popW = 570;
+    const popH = 480;
     const popX = w / 2;
     const popY = h / 2;
 
     this.add.rectangle(popX, popY, popW, popH, 0xFFF8E7)
-      .setStrokeStyle(3, 0xC4A882)
+      .setStrokeStyle(5, 0xC4A882)
       .setDepth(101);
 
     // Title
-    this.add.text(popX, popY - 130, 'Congratulations!', {
-      fontSize: '22px', fontFamily: 'monospace', color: '#8B6914',
+    this.add.text(popX, popY - 195, 'Congratulations!', {
+      fontSize: '33px', fontFamily: 'monospace', color: '#8B6914',
     }).setOrigin(0.5).setDepth(102);
 
     // Star decoration
-    this.add.text(popX, popY - 100, '* * *', {
-      fontSize: '18px', fontFamily: 'monospace', color: '#FFD700',
+    this.add.text(popX, popY - 150, '* * *', {
+      fontSize: '27px', fontFamily: 'monospace', color: '#FFD700',
     }).setOrigin(0.5).setDepth(102);
 
     // Message
-    this.add.text(popX, popY - 65, 'You served 10 barley teas!', {
-      fontSize: '14px', fontFamily: 'monospace', color: '#4A3728',
+    this.add.text(popX, popY - 98, 'You served 10 barley teas!', {
+      fontSize: '21px', fontFamily: 'monospace', color: '#4A3728',
     }).setOrigin(0.5).setDepth(102);
 
-    this.add.text(popX, popY - 40, 'Your restaurant is growing!', {
-      fontSize: '13px', fontFamily: 'monospace', color: '#7A6B5A',
+    this.add.text(popX, popY - 60, 'Your restaurant is growing!', {
+      fontSize: '20px', fontFamily: 'monospace', color: '#7A6B5A',
     }).setOrigin(0.5).setDepth(102);
 
     // Rewards
-    let ry = popY - 10;
+    let ry = popY - 15;
     this.add.text(popX, ry, 'Unlocked:', {
-      fontSize: '14px', fontFamily: 'monospace', color: '#5A7A4A',
+      fontSize: '21px', fontFamily: 'monospace', color: '#5A7A4A',
     }).setOrigin(0.5).setDepth(102);
 
-    ry += 25;
+    ry += 38;
     this.add.text(popX, ry, 'New Crop: Rice', {
-      fontSize: '13px', fontFamily: 'monospace', color: '#4A3728',
+      fontSize: '20px', fontFamily: 'monospace', color: '#4A3728',
     }).setOrigin(0.5).setDepth(102);
 
-    ry += 22;
+    ry += 33;
     this.add.text(popX, ry, 'New Recipe: Barley Rice ($3)', {
-      fontSize: '13px', fontFamily: 'monospace', color: '#4A3728',
+      fontSize: '20px', fontFamily: 'monospace', color: '#4A3728',
     }).setOrigin(0.5).setDepth(102);
 
-    ry += 22;
+    ry += 33;
     this.add.text(popX, ry, 'New Stations: Rice Bin, Sink, Bowls', {
-      fontSize: '13px', fontFamily: 'monospace', color: '#4A3728',
+      fontSize: '20px', fontFamily: 'monospace', color: '#4A3728',
     }).setOrigin(0.5).setDepth(102);
 
-    ry += 22;
+    ry += 33;
     this.add.text(popX, ry, '+10 Rice & +10 Barley added!', {
-      fontSize: '13px', fontFamily: 'monospace', color: '#8B6914',
+      fontSize: '20px', fontFamily: 'monospace', color: '#8B6914',
     }).setOrigin(0.5).setDepth(102);
 
     // Continue button
-    const continueBtn = this.add.text(popX, popY + 130, '[ Continue >> ]', {
-      fontSize: '18px', fontFamily: 'monospace', color: '#5A7A4A',
+    const continueBtn = this.add.text(popX, popY + 195, '[ Continue >> ]', {
+      fontSize: '27px', fontFamily: 'monospace', color: '#5A7A4A',
     }).setOrigin(0.5).setInteractive({ useHandCursor: true }).setDepth(102);
 
     continueBtn.on('pointerover', () => continueBtn.setColor('#6B9B5A'));
@@ -165,8 +165,8 @@ export class AccountingScene extends Phaser.Scene {
     const w = this.cameras.main.width;
     const h = this.cameras.main.height;
 
-    const nextBtn = this.add.text(w / 2, h - 60, '[ Next Day >> ]', {
-      fontSize: '22px', fontFamily: 'monospace', color: '#5A7A4A',
+    const nextBtn = this.add.text(w / 2, h - 90, '[ Next Day >> ]', {
+      fontSize: '33px', fontFamily: 'monospace', color: '#5A7A4A',
     }).setOrigin(0.5).setInteractive({ useHandCursor: true });
 
     nextBtn.on('pointerover', () => nextBtn.setColor('#6B9B5A'));

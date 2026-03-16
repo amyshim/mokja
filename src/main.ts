@@ -8,8 +8,8 @@ import { AccountingScene } from './scenes/AccountingScene';
 
 const config: Phaser.Types.Core.GameConfig = {
   type: Phaser.AUTO,
-  width: 512,
-  height: 712,
+  width: 768,
+  height: 1024,
   parent: document.body,
   backgroundColor: '#1a1a2e',
   pixelArt: true,

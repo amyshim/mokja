@@ -5,7 +5,7 @@
 Mokja is a browser-based farming and restaurant management game with Korean cuisine themes. Players run a farm-to-table restaurant in Southern California, cycling through four daily phases: Farm, Menu, Serve, and Accounting.
 
 **Target:** Women ages 25-45 seeking comfort gaming
-**Platform:** Browser (512x712px, mobile-optimized)
+**Platform:** Browser (768x1024px, mobile-optimized)
 **Engine:** Phaser 3 + TypeScript + Vite
 
 ---
@@ -18,8 +18,8 @@ The game loads and generates all placeholder assets before displaying the title 
 | ID | Requirement |
 |----|-------------|
 | R1.1.1 | Boot scene generates colored rectangle sprites for the barley crop (seed, growing, ready) |
-| R1.1.2 | Boot scene generates detailed 32x32px tile textures (checkerboard floor, brick walls, wood grain tables, stone paths, station tiles) |
-| R1.1.3 | Boot scene generates 28x32px player sprites with hair, face, shirt, and pants detail (4 directions) |
+| R1.1.2 | Boot scene generates detailed 48x48px tile textures (checkerboard floor, brick walls, wood grain tables, stone paths, station tiles) |
+| R1.1.3 | Boot scene generates 42x48px player sprites with hair, face, shirt, and pants detail (4 directions) |
 | R1.1.4 | Boot scene displays a loading progress bar during asset generation |
 | R1.1.5 | Boot scene auto-transitions to Title scene when loading completes |
 
@@ -211,11 +211,11 @@ Display 3 tables and an Overcooked-style kitchen with stations.
 | R4.1.1 | Display 3 tables, each with 2 seats |
 | R4.1.2 | Tables positioned in row 1 of the 16x16 grid, evenly spaced |
 | R4.1.3 | Floating order indicators centered above each table show status: large "!" when seated, distinctive food icons when ordered (cup shape for tea, bowl shape for rice — 12px, matching menu card colors), dirty indicators on table surface when dirty |
-| R4.1.4 | Kitchen area in rows 8-12 with stations: barley bin, oven, 4 stovetops, cup storage, trash bin, 4 kitchen tables. Rice bin, bowl station, and sink appear after rice unlock. |
+| R4.1.4 | Kitchen area in rows 8-12 with stations: barley station, rice station, recipe book, oven, 1 tea kettle, 1 rice cooker, cup storage, bowl storage, sink, trash bin, 4 kitchen tables. Recipe book available from start. Rice station, rice cooker, bowl station, and sink appear after rice unlock. Kitchen layout row 9: BARLEY, RICE, RECIPE, OVEN, floor, KETTLE, floor, COOKER, floor, floor, CUPS, BOWL, floor, SINK, floor, TRASH. Before rice unlock, locked station tiles (rice bin, rice cooker, bowl station, sink) are walkable floor — no invisible walls. |
 | R4.1.5 | Counter separates dining area (rows 0-6) from kitchen (rows 8-14) with walkable gap |
 | R4.1.6 | Display earnings tracker (revenue running total) |
-| R4.1.7 | HUD shows: held item, kitchen status (oven/stove state), inventory counts, context prompts |
-| R4.1.8 | Station labels displayed on map tiles (BIN, OVEN, STOVE x4, CUPS, TRASH, and RICE/BOWL/SINK after unlock) |
+| R4.1.7 | HUD shows: held item, kitchen status (oven/kettle/cooker state), inventory counts, context prompts |
+| R4.1.8 | Station labels displayed on map tiles (BARLEY, RECIPE, OVEN, KETTLE, CUPS, TRASH from start; RICE, COOKER, BOWL, SINK after rice unlock) |
 
 ### R4.2 Customer Generation
 Customers arrive dynamically, gated by ingredient availability.
@@ -232,7 +232,7 @@ Each customer group member is represented as a distinct on-screen sprite.
 | ID | Requirement |
 |----|-------------|
 | R4.3.1 | Each group member is rendered as an individual avatar sprite |
-| R4.3.2 | Avatars (24x28px) have randomized appearances: skin tone (5 variants), hair color (6 variants), shirt color (10 variants), with pants |
+| R4.3.2 | Avatars (36x42px) have randomized appearances: skin tone (5 variants), hair color (6 variants), shirt color (10 variants), with pants |
 | R4.3.3 | Avatars have 4 directional textures (up/down/left/right) with visible eyes, hair, shirt, and pants |
 | R4.3.4 | Avatar textures are generated programmatically at spawn time |
 | R4.3.5 | Avatar textures are cleaned up when the customer leaves and on scene shutdown |
@@ -262,10 +262,10 @@ Player takes orders and serves prepared food. Cooking is decoupled from ordering
 |----|-------------|
 | R4.5.1 | **Take order:** Press Space at a seated customer's table to take the entire group's order in one interaction |
 | R4.5.2 | All group members order the same dish (Barley Tea). servingsNeeded = groupSize (1 or 2) |
-| R4.5.3 | Taking an order does NOT deduct ingredients (ingredients deducted at barley bin) |
+| R4.5.3 | Taking an order does NOT deduct ingredients (ingredients deducted at barley station) |
 | R4.5.4 | If no ingredients are available when taking order, the customer leaves (no revenue) and avatars walk out |
 | R4.5.5 | Customer status changes from "seated" to "ordered"; floating indicator shows food icons (one per serving needed) |
-| R4.5.6 | **Serve:** Press Space at an ordered customer's table while holding barley_tea (single or on tray) to deliver one serving |
+| R4.5.6 | **Serve:** Press Space at an ordered customer's table while holding the correct item (barley_tea single or on tray; barley_rice single or on bowl stack) to deliver one serving |
 | R4.5.7 | Revenue ($2) added to wallet and dayResults per serving delivered |
 | R4.5.8 | Each serve increments servingsDelivered. When servingsDelivered >= servingsNeeded, status becomes "served"; avatars walk out; table marked dirty |
 | R4.5.9 | If player interacts with ordered table without holding barley_tea, message says "Need Barley Tea to serve!" |
@@ -277,24 +277,30 @@ Player carries items through the kitchen, with optional tray for multiple cups.
 
 | ID | Requirement |
 |----|-------------|
-| R4.6.1 | Player can hold one item at a time: barley, roasted_barley, empty_cup, barley_tea, rice, washed_rice, bowl, or barley_rice |
+| R4.6.1 | Player can hold one item at a time: barley, washed_barley, roasted_barley, empty_cup, barley_tea, rice, washed_rice, bowl, barley_rice, or a stack (bowl_stack) |
 | R4.6.2 | **Tray mechanic:** Picking up a second cup from cup storage while holding empty_cup or barley_tea upgrades to a tray |
 | R4.6.3 | Tray holds up to 4 slots — any mix of empty cups and filled barley tea |
-| R4.6.4 | Tray cups are filled one at a time at the hot stove (no need to set tray down) |
+| R4.6.4 | Tray cups are filled one at a time at the hot kettle (no need to set tray down) |
 | R4.6.5 | Serving one customer removes one filled cup from the tray |
 | R4.6.6 | When tray is emptied (0 empty + 0 filled), hands become free |
-| R4.6.7 | HUD displays what the player is holding, including tray contents (e.g., "Tray (3 tea, 1 empty)") |
-| R4.6.8 | Discard held items at the trash bin station (hold Space for 1 second) |
-| R4.6.9 | Player cannot pick up non-cup items while hands are full (shows "Hands full!" message) |
-| R4.6.10 | A held-item indicator is rendered above the player sprite (depth 12), following movement each frame |
-| R4.6.11 | Single items display as a 6px colored circle (tan=barley, brown=roasted, white=cup, gold=tea) |
-| R4.6.12 | Tray displays as a row of 5x5px squares — gold for filled cups, white for empty cups |
+| R4.6.7 | HUD displays what the player is holding, including tray contents (e.g., "Tray (3 tea, 1 empty)") and bowl stack contents (e.g., "Stack (2 rice, 1 empty)") |
+| R4.6.8 | **Bowl stack mechanic:** Picking up a second bowl from bowl station while holding bowl or barley_rice upgrades to a bowl_stack |
+| R4.6.9 | Bowl stack holds up to 4 slots — any mix of empty bowls and filled barley rice |
+| R4.6.10 | Bowl stack bowls are filled one at a time at the rice cooker with barley rice (no need to set stack down) |
+| R4.6.11 | Serving one customer removes one filled bowl from the stack |
+| R4.6.12 | When bowl stack is emptied (0 empty + 0 filled), hands become free |
+| R4.6.13 | Discard held items at the trash bin station (hold Space for 1 second) |
+| R4.6.14 | Player cannot pick up non-cup/non-bowl items while hands are full (shows "Hands full!" message) |
+| R4.6.15 | A held-item indicator is rendered above the player sprite (depth 12), following movement each frame |
+| R4.6.16 | Single items display as a 6px colored circle (tan=barley, brown=roasted, white=cup, gold=tea) |
+| R4.6.17 | Tray displays as a row of 6x6px squares — gold for filled cups, white for empty cups |
+| R4.6.18 | Bowl stack displays as a row of 6x6px squares — brown for filled barley rice, gray for empty bowls |
 
-### R4.7 Kitchen Stations — Barley Bin
+### R4.7 Kitchen Stations — Barley Station
 
 | ID | Requirement |
 |----|-------------|
-| R4.7.1 | Press Space at barley bin with empty hands to pick up 1 barley |
+| R4.7.1 | Press Space at barley station with empty hands to pick up 1 barley |
 | R4.7.2 | Picking up barley deducts 1 from inventory |
 | R4.7.3 | Cannot pick up barley if inventory is 0 |
 
@@ -302,43 +308,59 @@ Player carries items through the kitchen, with optional tray for multiple cups.
 
 | ID | Requirement |
 |----|-------------|
-| R4.8.1 | Press Space at empty oven while holding barley to place it — oven starts roasting |
+| R4.8.1 | Press Space at empty oven while holding raw barley to place it — oven starts roasting (accepts barley, not washed_barley) |
 | R4.8.2 | Oven roasts for 5 seconds. Player is free to walk away. |
 | R4.8.3 | Visual indicator on oven shows roasting progress (progress bar) |
 | R4.8.4 | After 5 seconds, oven shows "DONE" (green). Press Space with empty hands to pick up roasted_barley. |
 | R4.8.5 | If not picked up within 10 seconds, barley burns — oven shows "BURN" (red) |
 | R4.8.6 | Press Space on burned oven to discard and clear (oven returns to empty) |
 
-### R4.9 Kitchen Stations — Stovetops (x4)
+### R4.9 Kitchen Stations — Tea Kettle
 
-The kitchen has 4 independent stovetops. Each is a multi-purpose cooking station used for both barley tea and barley rice.
+The kitchen has 1 tea kettle dedicated to making barley tea.
 
 | ID | Requirement |
 |----|-------------|
-| R4.9.1 | 4 stove tiles in the kitchen, each operating independently with its own state |
-| R4.9.2 | Stove states: empty → has_ingredient → boiling → hot_with_product |
-| R4.9.3 | **Barley Tea mode:** Press Space at empty stove while holding roasted_barley to add barley (sets cups to 5) |
-| R4.9.4 | Press Space at stove with ingredient to start boiling |
-| R4.9.5 | Hold Space while facing boiling stove for 3 seconds to complete cooking |
+| R4.9.1 | 1 kettle tile in the kitchen with its own state |
+| R4.9.2 | Kettle states: empty → has_ingredient → boiling → hot_with_tea |
+| R4.9.3 | Press Space at empty kettle while holding roasted_barley to add barley (sets cups to 5) |
+| R4.9.4 | Press Space at kettle with ingredient to start boiling |
+| R4.9.5 | Hold Space while facing boiling kettle for 3 seconds to complete cooking |
 | R4.9.6 | Boil progress persists if player releases Space (can resume) |
-| R4.9.7 | Each stove indicator shows: "BOIL?" when has ingredient, percentage when boiling, "x5" (cups remaining) when hot with tea |
-| R4.9.8 | Press Space at hot stove while holding empty_cup → player receives barley_tea. If holding tray with empty cups → one empty becomes filled. Cups remaining decrements. |
-| R4.9.9 | When cups remaining reaches 0, stove returns to empty state |
+| R4.9.7 | Kettle indicator shows: "BOIL?" when has ingredient, percentage when boiling, "x5" (cups remaining) when hot with tea |
+| R4.9.8 | Press Space at hot kettle while holding empty_cup → player receives barley_tea. If holding tray with empty cups → one empty becomes filled. Cups remaining decrements. |
+| R4.9.9 | When cups remaining reaches 0, kettle returns to empty state |
 | R4.9.10 | 1 roasted barley = 5 cups of barley tea |
-| R4.9.11 | **Barley Rice mode (after unlock):** Press Space at empty stove while holding washed_rice to add rice, then add barley. Hold Space 3s to cook. Produces 5 servings of barley rice. |
-| R4.9.12 | Player must hold a bowl to pick up barley rice from the stove (one serving per bowl) |
-| R4.9.13 | When all rice servings are dispensed, stove returns to empty state |
-| R4.9.14 | 1 washed rice + 1 barley = 5 servings of barley rice |
+
+### R4.9x Kitchen Stations — Rice Cooker (unlocked with rice)
+
+The kitchen has 1 rice cooker dedicated to making barley rice.
+
+| ID | Requirement |
+|----|-------------|
+| R4.9x.1 | 1 rice cooker tile in the kitchen, appears after rice milestone unlock |
+| R4.9x.2 | Cooker states: empty → has_one_ingredient → has_both_ingredients → cooking → hot_with_rice |
+| R4.9x.3 | Press Space at empty or has_one_ingredient cooker while holding washed_rice or washed_barley to add ingredient. Accepts ingredients in either order. |
+| R4.9x.4 | Once both washed_rice and washed_barley are added, press Space to start cooking |
+| R4.9x.5 | Hold Space while facing cooking cooker for 3 seconds to complete cooking |
+| R4.9x.6 | Cook progress persists if player releases Space (can resume) |
+| R4.9x.7 | Cooker indicator shows: ingredient status when partially loaded, "COOK?" when both ingredients added, percentage when cooking, "x5" (servings remaining) when hot with rice |
+| R4.9x.8 | Player must hold a bowl (single or on stack) to pick up barley rice from the cooker (one serving per bowl) |
+| R4.9x.8a | Press Space at cooker with barley rice while holding bowl_stack with empty bowls → one empty becomes filled. Servings remaining decrements. |
+| R4.9x.9 | When all rice servings are dispensed, cooker returns to empty state |
+| R4.9x.10 | 1 washed rice + 1 washed barley = 5 servings of barley rice |
 
 ### R4.9a Kitchen Stations — Sink (unlocked with rice)
 
 | ID | Requirement |
 |----|-------------|
-| R4.9a.1 | Sink appears in kitchen after rice milestone unlock |
-| R4.9a.2 | Press Space at sink while holding raw rice to begin washing |
-| R4.9a.3 | Hold Space for 3 seconds to wash rice → produces washed_rice |
+| R4.9a.1 | Sink appears in the kitchen after rice milestone unlock (not available from start) |
+| R4.9a.2 | Press Space at sink while holding raw barley to begin washing → produces washed_barley |
+| R4.9a.2a | Press Space at sink while holding raw rice to begin washing → produces washed_rice |
+| R4.9a.3 | Hold Space for 3 seconds to wash the ingredient |
 | R4.9a.4 | Wash progress persists if player releases Space (can resume) |
 | R4.9a.5 | Sink indicator shows wash progress percentage |
+| R4.9a.6 | Both rice and barley must be washed before cooking barley rice. Washing is not required for barley tea. |
 
 ### R4.9b Kitchen Stations — Rice Bin (unlocked with rice)
 
@@ -354,9 +376,12 @@ The kitchen has 4 independent stovetops. Each is a multi-purpose cooking station
 | ID | Requirement |
 |----|-------------|
 | R4.9c.1 | Bowl station appears in kitchen after rice milestone unlock |
-| R4.9c.2 | Press Space at bowl station with empty hands to pick up a bowl |
-| R4.9c.3 | Bowls are unlimited |
-| R4.9c.4 | Bowls are required to plate barley rice from the stove |
+| R4.9c.2 | Press Space at bowl station with empty hands to pick up a single bowl |
+| R4.9c.3 | Press Space while holding bowl or barley_rice → upgrades to bowl_stack and adds 1 empty bowl |
+| R4.9c.4 | Press Space while holding bowl_stack with total < 4 → adds 1 empty bowl to stack |
+| R4.9c.5 | Press Space while holding bowl_stack with total = 4 → "Stack full!" message |
+| R4.9c.6 | Bowls are unlimited |
+| R4.9c.7 | Bowls are required to plate barley rice from the rice cooker |
 
 ### R4.9d Kitchen Stations — Trash Bin
 
@@ -367,6 +392,15 @@ The kitchen has 4 independent stovetops. Each is a multi-purpose cooking station
 | R4.9d.3 | Trash bin shows a progress indicator (percentage) while holding Space |
 | R4.9d.4 | If player releases Space before 1 second, discard is cancelled and progress resets |
 | R4.9d.5 | Cannot discard if hands are empty |
+
+### R4.9e Kitchen Stations — Recipe Book
+
+| ID | Requirement |
+|----|-------------|
+| R4.9e.1 | Recipe book station is available in the kitchen from the start |
+| R4.9e.2 | Press Space at the recipe book station to open a modal showing step-by-step recipe instructions |
+| R4.9e.3 | Modal can be closed by pressing Space or Escape |
+| R4.9e.4 | Modal displays recipe flows for all unlocked recipes |
 
 ### R4.10 Kitchen Stations — Cup Storage
 
@@ -383,9 +417,9 @@ The kitchen has 4 independent stovetops. Each is a multi-purpose cooking station
 | ID | Requirement |
 |----|-------------|
 | R4.11.1 | 4 kitchen table surfaces for staging items |
-| R4.11.2 | Press Space at empty kitchen table while holding an item to place it (tray state preserved) |
-| R4.11.3 | Press Space at kitchen table with an item while hands are empty to pick it up (tray state restored) |
-| R4.11.4 | Kitchen tables show a colored overlay and short label for the placed item (trays show filled/empty count) |
+| R4.11.2 | Press Space at empty kitchen table while holding an item to place it (tray and bowl stack state preserved) |
+| R4.11.3 | Press Space at kitchen table with an item while hands are empty to pick it up (tray and bowl stack state restored) |
+| R4.11.4 | Kitchen tables show a colored overlay and short label for the placed item (trays show filled/empty count, bowl stacks show "3R+1B" format) |
 | R4.11.5 | Cannot place on an occupied table or pick up from an empty table |
 
 ### R4.12 Customer Departure & Table Turnover
@@ -409,7 +443,7 @@ The kitchen has 4 independent stovetops. Each is a multi-purpose cooking station
 | R4.13.3 | Held-item indicator renders above player sprite (depth 12) |
 | R4.13.4 | Facing highlight renders below the player (depth 10) |
 | R4.13.5 | Table indicators render above all sprites (depth 20+) |
-| R4.13.6 | Station overlays (oven progress, stove label, kitchen table items) at depth 15-16 |
+| R4.13.6 | Station overlays (oven progress, kettle/cooker label, kitchen table items) at depth 15-16 |
 
 ### R4.14 Service Completion
 
@@ -427,30 +461,37 @@ The kitchen has 4 independent stovetops. Each is a multi-purpose cooking station
 | TC-4.1 | Enter Serve scene with Barley Tea on menu, 5 barley | 3 tables shown; customers begin arriving after ~500ms |
 | TC-4.2 | Observe first customer group spawn | Individual avatars appear at entrance and walk to table seats |
 | TC-4.3 | Walk to a seated customer's table, press Space | Group order taken; floating indicator shows food icons (1 or 2 per group size); inventory unchanged |
-| TC-4.4 | Walk to barley bin, press Space | Pick up barley; inventory decreases by 1 |
+| TC-4.4 | Walk to barley station, press Space | Pick up barley; inventory decreases by 1 |
 | TC-4.5 | Walk to oven, press Space (holding barley) | Barley placed in oven; progress bar starts |
 | TC-4.6 | Wait 5s, walk to oven, press Space (empty hands) | Pick up roasted barley; oven clears |
 | TC-4.7 | Wait >10s at oven without picking up | Oven shows "BURN"; press Space to discard |
-| TC-4.8 | Walk to stove, press Space (holding roasted barley) | Barley added to stove; stove shows "BOIL?" |
-| TC-4.9 | Press Space at stove (empty hands), hold Space for 3s | Stove boils; shows "x5" |
+| TC-4.8 | Walk to kettle, press Space (holding roasted barley) | Barley added to kettle; kettle shows "BOIL?" |
+| TC-4.9 | Press Space at kettle (empty hands), hold Space for 3s | Kettle boils; shows "x5" |
 | TC-4.10 | Walk to cup storage, press Space | Pick up empty cup |
-| TC-4.11 | Walk to hot stove, press Space (holding empty cup) | Receive barley tea; stove shows "x4" |
+| TC-4.11 | Walk to hot kettle, press Space (holding empty cup) | Receive barley tea; kettle shows "x4" |
 | TC-4.12 | Walk to ordered table (group of 1), press Space (holding barley tea) | Served; +$2 revenue; customer leaves; table becomes dirty |
 | TC-4.12a | Walk to ordered table (group of 2), press Space once (holding tea) | 1 serving delivered (+$2); indicator shows 1 remaining; customer stays |
 | TC-4.12b | Press Space again at same table (holding tea) | 2nd serving delivered (+$2); customer leaves; table dirty |
 | TC-4.13 | Press Space at dirty table | Table cleaned; dirty indicator removed; new customer arrives after 3-5s |
 | TC-4.14 | Place barley tea on kitchen table, then pick it up | Item placed and retrieved correctly |
-| TC-4.15 | Fill all 5 cups from one batch | After 5th cup, stove returns to empty |
+| TC-4.15 | Fill all 5 cups from one batch | After 5th cup, kettle returns to empty |
 | TC-4.16 | Try to serve without holding barley tea | "Need Barley Tea to serve!" message |
 | TC-4.17 | Face trash bin, hold Space for 1s while holding an item | Item discarded; hands empty |
 | TC-4.22 | Pick up cup, then press Space at cup storage again | Upgrades to tray with 2 empty cups |
 | TC-4.23 | Pick up 4 cups (press Space at cups 4 times) | Tray shows 4 empty cups; "Tray full!" on 5th press |
-| TC-4.24 | Hold tray with 3 empty cups, press Space at hot stove 3 times | 3 cups filled; tray shows 3 tea, 0 empty |
+| TC-4.24 | Hold tray with 3 empty cups, press Space at hot kettle 3 times | 3 cups filled; tray shows 3 tea, 0 empty |
 | TC-4.25 | Hold tray with 2 tea, serve 2 customers | Each serve removes 1 tea; tray empties after 2nd serve; hands free |
 | TC-4.26 | Place tray (2 tea, 1 empty) on kitchen table, pick it up later | Tray state preserved and restored correctly |
 | TC-4.27 | Hold single barley tea, press Space at cups | Upgrades to tray (1 tea, 1 empty) |
 | TC-4.28 | Observe held-item indicator while holding barley | Colored circle appears above player |
 | TC-4.29 | Observe held-item indicator while holding tray (2 tea, 1 empty) | Row of 3 squares above player: 2 gold, 1 white |
+| TC-4.30 | Pick up bowl, then press Space at bowl station again | Upgrades to bowl stack with 2 empty bowls |
+| TC-4.31 | Pick up 4 bowls (press Space at bowls 4 times) | Stack shows 4 empty bowls; "Stack full!" on 5th press |
+| TC-4.32 | Hold stack with 3 empty bowls, press Space at rice cooker with barley rice 3 times | 3 bowls filled; stack shows 3 rice, 0 empty |
+| TC-4.33 | Hold stack with 2 rice, serve 2 customers who ordered barley rice | Each serve removes 1 rice; stack empties after 2nd serve; hands free |
+| TC-4.34 | Place bowl stack (2 rice, 1 empty) on kitchen table, pick it up later | Stack state preserved and restored correctly |
+| TC-4.35 | Hold single barley rice, press Space at bowl station | Upgrades to stack (1 rice, 1 empty) |
+| TC-4.36 | Observe held-item indicator while holding bowl stack (2 rice, 1 empty) | Row of 3 squares above player: 2 brown, 1 gray |
 | TC-4.18 | Serve all customers, clean all tables | "All done! Walk to EXIT to close." |
 | TC-4.19 | Walk to EXIT tile | Transitions to Accounting; state saved |
 | TC-4.20 | Ingredients run out before next customer spawns | No more customers arrive |
@@ -541,8 +582,8 @@ Game state persists via localStorage.
 
 | ID | Recipe | Ingredients | Prep Steps |
 |----|--------|-------------|------------|
-| R7.2.1 | Barley Tea | 1 barley | Roast in oven (5s) → Boil at stove (hold 3s) → Fill cup |
-| R7.2.2 | Barley Rice | 1 rice + 1 barley | Wash rice at sink (hold 3s) → Add rice + barley to stove → Cook (hold 3s) → Pick up with bowl (5 servings) |
+| R7.2.1 | Barley Tea | 1 barley | Roast barley in oven (5s) → Boil at kettle (hold 3s) → Fill cup |
+| R7.2.2 | Barley Rice | 1 rice + 1 barley | Wash rice at sink (hold 3s) + Wash barley at sink (hold 3s) → Add washed rice + washed barley to rice cooker (either order) → Cook (hold 3s) → Pick up with bowl (5 servings) |
 
 ### R7.3 Recipe Prices
 
@@ -555,24 +596,25 @@ Game state persists via localStorage.
 
 | ID | Ratio | Value |
 |----|-------|-------|
-| R7.4.1 | Barley per pick-up from bin | 1 (deducted from inventory) |
+| R7.4.1 | Barley per pick-up from barley station | 1 (deducted from inventory) |
 | R7.4.2 | Roasted barley per oven batch | 1 barley in → 1 roasted barley out |
 | R7.4.3 | Cups of tea per roasted barley | 5 |
 | R7.4.4 | Oven roast time | 5 seconds |
 | R7.4.5 | Oven burn time | 10 seconds |
-| R7.4.6 | Stove boil time | 3 seconds (hold Space) |
+| R7.4.6 | Kettle boil time | 3 seconds (hold Space) |
 | R7.4.7 | Rice per pick-up from rice bin | 1 (deducted from inventory) |
 | R7.4.8 | Sink wash time | 3 seconds (hold Space) |
-| R7.4.9 | Barley Rice per cook | 1 washed rice + 1 barley → 5 servings (requires bowl per serving) |
+| R7.4.9 | Barley Rice per cook | 1 washed rice + 1 washed barley → 5 servings (requires bowl per serving) |
 | R7.4.10 | Trash bin discard time | 1 second (hold Space) |
-| R7.4.11 | Number of stovetops | 4 (independent) |
+| R7.4.11 | Number of tea kettles | 1 |
+| R7.4.11a | Number of rice cookers | 1 |
 | R7.4.12 | Number of kitchen tables | 4 |
 
 ### R7.5 Milestones
 
 | ID | Milestone | Trigger | Reward |
 |----|-----------|---------|--------|
-| R7.5.1 | Rice Unlock | Serve 10 barley teas (cumulative across days) | Congratulatory message, rice crop unlocked, +10 rice & +10 barley inventory, barley rice recipe unlocked, rice bin + sink + bowl stations added to kitchen |
+| R7.5.1 | Rice Unlock | Serve 10 barley teas (cumulative across days) | Congratulatory message, rice crop unlocked, +10 rice & +10 barley inventory, barley rice recipe unlocked, rice bin + rice cooker + bowl station + sink added to kitchen |
 
 | ID | Requirement |
 |----|-------------|
@@ -597,12 +639,12 @@ Game state persists via localStorage.
 | TC-7.2 | Serve 1 Barley Tea | Wallet += $2 |
 | TC-7.3 | Harvest unwatered barley | Inventory += 2 barley |
 | TC-7.4 | Harvest watered barley | Inventory += 4 barley |
-| TC-7.5 | Pick up barley from bin | Inventory -= 1 barley |
-| TC-7.6 | Fill 5 cups from one stove batch | 5 cups dispensed, stove empties |
+| TC-7.5 | Pick up barley from barley station | Inventory -= 1 barley |
+| TC-7.6 | Fill 5 cups from one kettle batch | 5 cups dispensed, kettle empties |
 | TC-7.7 | Play 3 full days, check wallet | Wallet = cumulative sum of all days' earnings |
 | TC-7.8 | Serve 10th barley tea, go to accounting | Congratulatory message shown; rice unlocked; +10 rice & +10 barley in inventory |
 | TC-7.9 | Next day after rice unlock, check farm | Can plant rice on plots |
-| TC-7.10 | Next day after rice unlock, check kitchen | Rice bin, sink, and bowl stations visible; 4 stovetops available |
+| TC-7.10 | Next day after rice unlock, check kitchen | Rice bin, rice cooker, bowl station, and sink visible; kettle available |
 | TC-7.11 | Next day after rice unlock, check menu | Barley Rice recipe available |
 
 ---
@@ -642,10 +684,10 @@ Game state persists via localStorage.
 
 | ID | Requirement |
 |----|-------------|
-| R9.1.1 | Game canvas is 512x712 pixels |
+| R9.1.1 | Game canvas is 768x1024 pixels |
 | R9.1.2 | Scale mode: FIT with CENTER_BOTH |
 | R9.1.3 | Renderer: AUTO (WebGL with Canvas fallback) |
-| R9.1.4 | All scenes use 16x16 tile grid (32px tiles) for game area (512x512), HUD below (512x200) |
+| R9.1.4 | All scenes use 16x16 tile grid (48px tiles) for game area (768x768), HUD below (768x256) |
 
 ### R9.2 Scene Themes
 
@@ -665,13 +707,13 @@ Game state persists via localStorage.
 | R9.3.2 | Selected menu dish highlighted with green checkbox and border |
 | R9.3.3 | Farm plots change color based on crop state (barley gold/tan) |
 | R9.3.4 | Oven progress bar fills during roasting; green when done, red when burned |
-| R9.3.5 | Each stove label shows state (BOIL?, percentage, cups/servings remaining) |
+| R9.3.5 | Kettle label shows state (BOIL?, percentage, cups remaining). Cooker label shows state (ingredient status, COOK?, percentage, servings remaining). |
 | R9.3.6 | Kitchen table overlays show placed items with color and short label |
 | R9.3.7 | Floating order indicators centered above tables: large "!" when seated, distinctive food icons (12px — cup shape for tea, bowl shape for rice, matching menu colors) when ordered, dirty indicators on table when dirty |
 | R9.3.8 | Yellow facing highlight on interactable tiles |
 | R9.3.9 | Boil progress bar in HUD during active boiling |
-| R9.3.10 | Held-item indicator above player: colored circle for single items, row of squares for tray |
-| R9.3.11 | Player sprite is 28x32px with hair, face, shirt, and pants detail |
+| R9.3.10 | Held-item indicator above player: colored circle for single items, row of squares for tray or bowl stack |
+| R9.3.11 | Player sprite is 42x48px with hair, face, shirt, and pants detail |
 | R9.3.12 | Table tiles use full-bleed fill (no border) so adjacent tiles merge seamlessly |
 | R9.3.13 | Order indicators render at depth 30 above all other game objects |
 
@@ -692,19 +734,19 @@ Game state persists via localStorage.
 | 7 | Menu: Click "Open Restaurant" | Menu saved; transitions to Serve scene |
 | 8 | Serve: Customers arrive and auto-seat | Floating "!" icon appears above table after customers sit (not during walk-in) |
 | 9 | Serve: Walk to table, press Space → take group order | Floating indicator shows food icons (1 per group member) |
-| 10 | Serve: Walk to BIN, press Space | Pick up barley (inventory -1) |
+| 10 | Serve: Walk to BARLEY, press Space | Pick up barley (inventory -1) |
 | 11 | Serve: Walk to OVEN, press Space | Barley placed; roasting starts |
-| 12 | Serve: Wait 5s, walk to OVEN, press Space | Pick up roasted barley |
-| 13 | Serve: Walk to STOVE, press Space | Add roasted barley to stove |
-| 14 | Serve: Press Space at STOVE, hold Space for 3s | Stove boils; shows "x5" |
-| 15 | Serve: Walk to CUPS, press Space 3 times | Pick up 3 empty cups on tray |
-| 16 | Serve: Walk to STOVE, press Space 3 times | Fill 3 cups → tray: 3 tea, 0 empty |
-| 17 | Serve: Walk to ordered table, press Space | 1 tea served from tray; +$2; if group fully served → table dirty; else indicator shows remaining |
-| 18 | Serve: Press Space at dirty table | Table cleaned; dirty cups removed; next customer arrives |
-| 19 | Serve: Repeat until all customers served | All served; "All done!" prompt |
-| 20 | Serve: Walk to EXIT | Transition to Accounting |
-| 21 | Accounting: Verify totals | Revenue displayed; wallet updated |
-| 22 | Accounting: Click "Next Day" | Day 2; menu/customers reset; crops advanced |
+| 13 | Serve: Wait 5s, walk to OVEN, press Space | Pick up roasted barley |
+| 14 | Serve: Walk to KETTLE, press Space | Add roasted barley to kettle |
+| 15 | Serve: Press Space at KETTLE, hold Space for 3s | Kettle boils; shows "x5" |
+| 16 | Serve: Walk to CUPS, press Space 3 times | Pick up 3 empty cups on tray |
+| 17 | Serve: Walk to KETTLE, press Space 3 times | Fill 3 cups → tray: 3 tea, 0 empty |
+| 18 | Serve: Walk to ordered table, press Space | 1 tea served from tray; +$2; if group fully served → table dirty; else indicator shows remaining |
+| 19 | Serve: Press Space at dirty table | Table cleaned; dirty cups removed; next customer arrives |
+| 20 | Serve: Repeat until all customers served | All served; "All done!" prompt |
+| 21 | Serve: Walk to EXIT | Transition to Accounting |
+| 22 | Accounting: Verify totals | Revenue displayed; wallet updated |
+| 23 | Accounting: Click "Next Day" | Day 2; menu/customers reset; crops advanced |
 
 ---
 
@@ -716,9 +758,9 @@ Game state persists via localStorage.
 | TC-EDGE-2 | All tables occupied, more customers waiting | New customers wait; arrive when a table becomes clean |
 | TC-EDGE-3 | All 3 tables dirty at once | Must clean at least 1 before next customer can arrive |
 | TC-EDGE-4 | Try to serve customer without barley tea | "Need Barley Tea to serve!" message |
-| TC-EDGE-5 | Try to pick up barley from bin with 0 inventory | "No barley!" message |
+| TC-EDGE-5 | Try to pick up barley from barley station with 0 inventory | "No barley!" message |
 | TC-EDGE-6 | Leave barley in oven for >10 seconds | Barley burns; must discard and retry |
-| TC-EDGE-7 | Fill all 5 cups from one stove batch | Stove empties; must add more roasted barley |
+| TC-EDGE-7 | Fill all 5 cups from one kettle batch | Kettle empties; must add more roasted barley |
 | TC-EDGE-8 | Place item on kitchen table, pick it up later | Item persists on table until retrieved |
 | TC-EDGE-9 | Try to pick up barley while holding a cup | "Hands full!" message |
 | TC-EDGE-9d | Face trash bin with nothing held, hold Space | "Nothing to discard!" message |
@@ -727,10 +769,13 @@ Game state persists via localStorage.
 | TC-EDGE-9a | Pick up 5th cup onto full tray (4 cups) | "Tray full!" message |
 | TC-EDGE-9b | Hold tray with 0 empty, 0 filled (all served) | Hands become free automatically |
 | TC-EDGE-9c | Place tray on kitchen table, place another item on 2nd table | Both tables show correct items; pick up restores states |
+| TC-EDGE-9g | Pick up 5th bowl onto full stack (4 bowls) | "Stack full!" message |
+| TC-EDGE-9h | Hold bowl stack with 0 empty, 0 filled (all served) | Hands become free automatically |
+| TC-EDGE-9i | Place bowl stack on kitchen table, place another item on 2nd table | Both tables show correct items; pick up restores stack states |
 | TC-EDGE-10 | Player clears localStorage during gameplay | Next load shows no save; must start new game |
 | TC-EDGE-11 | Multiple days without harvesting | Crops stay ready indefinitely; do not expire |
 | TC-EDGE-12 | Ingredients run out mid-service (no seated customers) | No more customers spawn; player serves remaining orders and closes service |
 | TC-EDGE-13 | Ingredients run out after customer seated but before ordering | Customer leaves; table becomes dirty |
 | TC-EDGE-14 | Player closes service before serving any customers | Accounting shows 0 customers, $0 revenue |
-| TC-EDGE-15 | Release Space during stove boil, then resume | Boil progress persists; resumes on next hold |
+| TC-EDGE-15 | Release Space during kettle boil, then resume | Boil progress persists; resumes on next hold |
 | TC-EDGE-16 | Exit scene while customers are mid-walk | Scene shuts down cleanly; all avatar textures cleaned up |

@@ -15,21 +15,21 @@ export class TitleScene extends Phaser.Scene {
 
     // Title
     this.add.text(w / 2, h * 0.3, 'MOKJA', {
-      fontSize: '64px',
+      fontSize: '96px',
       fontFamily: 'monospace',
       color: '#e8d5b7',
       fontStyle: 'bold',
     }).setOrigin(0.5);
 
-    this.add.text(w / 2, h * 0.3 + 50, 'A Korean Restaurant Game', {
-      fontSize: '16px',
+    this.add.text(w / 2, h * 0.3 + 75, 'A Korean Restaurant Game', {
+      fontSize: '24px',
       fontFamily: 'monospace',
       color: '#888888',
     }).setOrigin(0.5);
 
     // New Game button
     const newBtn = this.add.text(w / 2, h * 0.55, '[ New Game ]', {
-      fontSize: '24px',
+      fontSize: '36px',
       fontFamily: 'monospace',
       color: '#4CAF50',
     }).setOrigin(0.5).setInteractive({ useHandCursor: true });
@@ -47,7 +47,7 @@ export class TitleScene extends Phaser.Scene {
     // Continue button (only if save exists)
     if (hasSave()) {
       const contBtn = this.add.text(w / 2, h * 0.65, '[ Continue ]', {
-        fontSize: '24px',
+        fontSize: '36px',
         fontFamily: 'monospace',
         color: '#2196F3',
       }).setOrigin(0.5).setInteractive({ useHandCursor: true });
@@ -61,7 +61,7 @@ export class TitleScene extends Phaser.Scene {
 
       // Delete save
       const delBtn = this.add.text(w / 2, h * 0.75, '[ Delete Save ]', {
-        fontSize: '14px',
+        fontSize: '21px',
         fontFamily: 'monospace',
         color: '#666666',
       }).setOrigin(0.5).setInteractive({ useHandCursor: true });

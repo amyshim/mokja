@@ -7,7 +7,7 @@ import { RECIPES } from '../config/recipes';
 import { saveGame } from '../state/persistence';
 
 // --- Tile grid constants ---
-const TILE = 32;
+const TILE = 48;
 const COLS = 16;
 const ROWS = 16;
 
@@ -30,13 +30,15 @@ const X = 7;  // exit (walkable, triggers transition)
 // Kitchen station types
 const S = 10; // barley bin
 const O = 11; // oven
-const V = 12; // stove
+const KT = 12; // kettle
 const U = 13; // cup storage
 const L = 14; // kitchen table (surface)
 const RB = 15; // rice bin
 const SK = 16; // sink
 const BW = 17; // bowl station
 const TR = 18; // trash bin
+const RC = 19; // rice cooker
+const RK = 20; // recipe book
 
 // Restaurant layout: dining area (top), counter, kitchen (bottom), exit
 // 3 tables with 2 seats each, spread across row 1
@@ -51,9 +53,9 @@ const REST_MAP: number[][] = [
   [F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F], // 6  dining floor
   [K,K,K,K,F,F,F,F,F,F,F,F,K,K,K,K], // 7  counter (gap cols 4-11)
   [F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F], // 8  kitchen floor
-  [S,RB,F,O,F,V,V,V,V,F,U,BW,F,SK,F,TR], // 9  stations
+  [S,RB,F,O,F,KT,F,RC,F,F,U,BW,F,SK,F,TR], // 9  stations
   [F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F], // 10 kitchen floor
-  [F,L,F,L,F,F,F,F,L,F,L,F,F,F,F,F], // 11 kitchen tables (4)
+  [RK,L,F,L,F,F,F,F,L,F,L,F,F,F,F,F], // 11 recipe book + kitchen tables (4)
   [F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F], // 12
   [F,F,F,F,F,F,F,P,F,F,F,F,F,F,F,F], // 13 path
   [F,F,F,F,F,F,F,X,F,F,F,F,F,F,F,F], // 14 exit
@@ -144,38 +146,16 @@ function getTableIdAt(col: number, row: number): number | null {
   return null;
 }
 
-// Stove tile positions -> index
-interface StoveTileDef {
-  index: number;
-  col: number;
-  row: number;
-}
-
-const STOVE_TILES: StoveTileDef[] = [];
-// Auto-populate from REST_MAP
-(() => {
-  let idx = 0;
-  for (let r = 0; r < ROWS; r++) {
-    for (let c = 0; c < COLS; c++) {
-      if (REST_MAP[r][c] === V) {
-        STOVE_TILES.push({ index: idx++, col: c, row: r });
-      }
-    }
-  }
-})();
-
-type StationType = 'barley_bin' | 'rice_bin' | 'oven' | 'stove' | 'cups' | 'sink' | 'ktable' | 'bowl' | 'trash';
+type StationType = 'barley_bin' | 'rice_bin' | 'oven' | 'kettle' | 'rice_cooker' | 'recipe_book' | 'cups' | 'sink' | 'ktable' | 'bowl' | 'trash';
 
 function getStationAt(col: number, row: number): { type: StationType; index?: number } | null {
   const tile = REST_MAP[row]?.[col];
   if (tile === S) return { type: 'barley_bin' };
   if (tile === RB) return { type: 'rice_bin' };
   if (tile === O) return { type: 'oven' };
-  if (tile === V) {
-    const st = STOVE_TILES.find(t => t.col === col && t.row === row);
-    if (st) return { type: 'stove', index: st.index };
-    return { type: 'stove', index: 0 };
-  }
+  if (tile === KT) return { type: 'kettle' };
+  if (tile === RC) return { type: 'rice_cooker' };
+  if (tile === RK) return { type: 'recipe_book' };
   if (tile === U) return { type: 'cups' };
   if (tile === SK) return { type: 'sink' };
   if (tile === BW) return { type: 'bowl' };
@@ -190,7 +170,12 @@ function getStationAt(col: number, row: number): { type: StationType; index?: nu
 function isWalkable(col: number, row: number): boolean {
   if (col < 0 || col >= COLS || row < 0 || row >= ROWS) return false;
   const t = REST_MAP[row][col];
-  return t === F || t === P || t === X;
+  if (t === F || t === P || t === X) return true;
+  // When rice is NOT unlocked, RB, RC, BW, SK render as floor and should be walkable
+  if (!GameState.getInstance().isCropUnlocked('rice')) {
+    if (t === RB || t === RC || t === BW || t === SK) return true;
+  }
+  return false;
 }
 
 function tx(col: number): number { return col * TILE + TILE / 2; }
@@ -247,6 +232,7 @@ interface OrderIndicator {
 const ITEM_NAMES: Record<string, string> = {
   barley: 'Barley',
   roasted_barley: 'Roasted Barley',
+  washed_barley: 'Washed Barley',
   empty_cup: 'Empty Cup',
   barley_tea: 'Barley Tea',
   tray: 'Tray',
@@ -254,18 +240,21 @@ const ITEM_NAMES: Record<string, string> = {
   washed_rice: 'Washed Rice',
   barley_rice: 'Barley Rice',
   bowl: 'Bowl',
+  bowl_stack: 'Stack',
 };
 
 // Item indicator colors
 const ITEM_COLORS: Record<string, number> = {
   barley: 0xD4AA70,
   roasted_barley: 0x8B6914,
+  washed_barley: 0xB89960,
   empty_cup: 0xEEEEDD,
   barley_tea: 0xC8A960,
   rice: 0xB8D4B8,
   washed_rice: 0xCCDDCC,
   barley_rice: 0xC4956A,
   bowl: 0xF0E6D2,
+  bowl_stack: 0xD4B896,
 };
 
 // --- Scene ---
@@ -282,7 +271,8 @@ export class ServeScene extends Phaser.Scene {
   private ovenProgressBg!: Phaser.GameObjects.Rectangle;
   private ovenProgressBar!: Phaser.GameObjects.Rectangle;
   private ovenLabel!: Phaser.GameObjects.Text;
-  private stoveLabels: Phaser.GameObjects.Text[] = [];
+  private kettleLabel!: Phaser.GameObjects.Text;
+  private riceCookerLabel!: Phaser.GameObjects.Text;
   private sinkLabel!: Phaser.GameObjects.Text;
   private trashLabel!: Phaser.GameObjects.Text;
   private ktableOverlays: Phaser.GameObjects.Rectangle[] = [];
@@ -310,8 +300,13 @@ export class ServeScene extends Phaser.Scene {
   private wasd!: Record<string, Phaser.Input.Keyboard.Key>;
   private spaceKey!: Phaser.Input.Keyboard.Key;
 
-  // Hold-space state (for stove boil, sink wash, trash discard)
-  private isHoldingStove = false;
+  // Recipe modal
+  private recipeModal?: Phaser.GameObjects.Container;
+  private recipeModalVisible = false;
+
+  // Hold-space state (for kettle boil, rice cooker cook, sink wash, trash discard)
+  private isHoldingKettle = false;
+  private isHoldingRiceCooker = false;
   private isHoldingSink = false;
   private isHoldingTrash = false;
 
@@ -346,9 +341,11 @@ export class ServeScene extends Phaser.Scene {
     // Reset state
     CookingSystem.reset();
     this.isMoving = false;
-    this.isHoldingStove = false;
+    this.isHoldingKettle = false;
+    this.isHoldingRiceCooker = false;
     this.isHoldingSink = false;
     this.isHoldingTrash = false;
+    this.recipeModalVisible = false;
     this.playerCol = 7;
     this.playerRow = 5;
     this.facing = 'up';
@@ -399,10 +396,13 @@ export class ServeScene extends Phaser.Scene {
     // Update oven timer
     CookingSystem.updateOven(deltaSec);
 
-    // Handle stove hold (boil tea or cook rice)
-    this.handleStoveHold(deltaSec);
+    // Handle kettle hold (boil tea)
+    this.handleKettleHold(deltaSec);
 
-    // Handle sink hold (wash rice)
+    // Handle rice cooker hold (cook rice)
+    this.handleRiceCookerHold(deltaSec);
+
+    // Handle sink hold (wash rice or barley)
     this.handleSinkHold(deltaSec);
 
     // Handle trash hold (discard held item)
@@ -430,8 +430,17 @@ export class ServeScene extends Phaser.Scene {
     };
 
     this.spaceKey = this.input.keyboard!.addKey('SPACE');
-    this.spaceKey.on('down', () => this.handleAction());
+    this.spaceKey.on('down', () => {
+      if (this.recipeModalVisible) {
+        this.hideRecipeModal();
+        return;
+      }
+      this.handleAction();
+    });
     this.input.keyboard!.addKey('ENTER').on('down', () => this.handleAction());
+    this.input.keyboard!.addKey('ESC').on('down', () => {
+      if (this.recipeModalVisible) this.hideRecipeModal();
+    });
 
     // R key no longer discards — use the trash bin station instead
   }
@@ -462,7 +471,9 @@ export class ServeScene extends Phaser.Scene {
           case S: key = 'tile_bin'; break;
           case RB: key = riceUnlocked ? 'tile_rice_bin' : 'tile_floor'; break;
           case O: key = 'tile_oven'; break;
-          case V: key = 'tile_stove'; break;
+          case KT: key = 'tile_kettle'; break;
+          case RC: key = riceUnlocked ? 'tile_rice_cooker' : 'tile_floor'; break;
+          case RK: key = 'tile_recipe_book'; break;
           case U: key = 'tile_cups'; break;
           case SK: key = riceUnlocked ? 'tile_sink' : 'tile_floor'; break;
           case BW: key = riceUnlocked ? 'tile_bowls' : 'tile_floor'; break;
@@ -476,71 +487,83 @@ export class ServeScene extends Phaser.Scene {
       }
     }
 
-    // Station labels
-    const labelStyle = { fontSize: '8px', fontFamily: 'monospace', color: '#FFFFFF' };
-    this.add.text(tx(0), ty(9) + 1, 'BIN', labelStyle).setOrigin(0.5);
+    // Station labels — positioned at bottom of tile so icons stay visible
+    const labelBot = ty(9) + TILE / 2 - 8; // 8px from bottom edge
+    const labelStyle: Phaser.Types.GameObjects.Text.TextStyle = {
+      fontSize: '11px', fontFamily: 'monospace', color: '#FFFFFF',
+    };
+    this.add.text(tx(0), labelBot, 'BARLEY', labelStyle).setOrigin(0.5);
     if (riceUnlocked) {
-      this.riceBinStationLabel = this.add.text(tx(1), ty(9) + 1, 'RICE', labelStyle).setOrigin(0.5);
+      this.riceBinStationLabel = this.add.text(tx(1), labelBot, 'RICE', labelStyle).setOrigin(0.5);
     }
-    this.add.text(tx(3), ty(9) + 1, 'OVEN', labelStyle).setOrigin(0.5);
-    // Stove labels generated per-stove below
-    this.add.text(tx(10), ty(9) + 1, 'CUPS', { fontSize: '8px', fontFamily: 'monospace', color: '#222222' }).setOrigin(0.5);
+    this.add.text(tx(3), labelBot, 'OVEN', labelStyle).setOrigin(0.5);
+    this.add.text(tx(5), labelBot, 'KETTLE', labelStyle).setOrigin(0.5);
     if (riceUnlocked) {
-      this.add.text(tx(11), ty(9) + 1, 'BOWL', labelStyle).setOrigin(0.5);
-      this.sinkStationLabel = this.add.text(tx(13), ty(9) + 1, 'SINK', labelStyle).setOrigin(0.5);
+      this.add.text(tx(7), labelBot, 'COOKER', labelStyle).setOrigin(0.5);
     }
-    this.add.text(tx(15), ty(9) + 1, 'TRASH', { fontSize: '6px', fontFamily: 'monospace', color: '#FFFFFF' }).setOrigin(0.5);
+    this.add.text(tx(10), labelBot, 'CUPS', labelStyle).setOrigin(0.5);
+    if (riceUnlocked) {
+      this.add.text(tx(11), labelBot, 'BOWL', labelStyle).setOrigin(0.5);
+    }
+    if (riceUnlocked) {
+      this.sinkStationLabel = this.add.text(tx(13), labelBot, 'SINK', labelStyle).setOrigin(0.5);
+    }
+    this.add.text(tx(0), ty(11) + TILE / 2 - 8, 'RECIPE', labelStyle).setOrigin(0.5);
+    this.add.text(tx(15), labelBot, 'TRASH', labelStyle).setOrigin(0.5);
 
     // Oven progress overlay
     const ovenX = tx(3);
     const ovenY = ty(9);
-    this.ovenOverlay = this.add.rectangle(ovenX, ovenY - 12, 24, 5, 0x000000, 0).setDepth(15);
-    this.ovenProgressBg = this.add.rectangle(ovenX, ovenY - 12, 24, 5, 0x333333, 0.8).setDepth(15);
-    this.ovenProgressBar = this.add.rectangle(ovenX - 12, ovenY - 12, 0, 5, 0x44CC44).setDepth(16).setOrigin(0, 0.5);
-    this.ovenLabel = this.add.text(ovenX, ovenY - 20, '', {
-      fontSize: '7px', fontFamily: 'monospace', color: '#FFFFFF',
+    this.ovenOverlay = this.add.rectangle(ovenX, ovenY - 18, 36, 8, 0x000000, 0).setDepth(15);
+    this.ovenProgressBg = this.add.rectangle(ovenX, ovenY - 18, 36, 8, 0x333333, 0.8).setDepth(15);
+    this.ovenProgressBar = this.add.rectangle(ovenX - 18, ovenY - 18, 0, 8, 0x44CC44).setDepth(16).setOrigin(0, 0.5);
+    this.ovenLabel = this.add.text(ovenX, ovenY - 30, '', {
+      fontSize: '13px', fontFamily: 'monospace', color: '#FFFFFF',
     }).setOrigin(0.5).setDepth(16);
 
-    // Stove label overlays (one per stove)
-    this.stoveLabels = [];
-    for (const st of STOVE_TILES) {
-      const sx = tx(st.col);
-      const sy = ty(st.row);
-      const lbl = this.add.text(sx, sy - 16, '', {
-        fontSize: '7px', fontFamily: 'monospace', color: '#FFFFFF',
-      }).setOrigin(0.5).setDepth(16);
-      this.stoveLabels.push(lbl);
-    }
+    // Kettle label overlay
+    const kettleX = tx(5);
+    const kettleY = ty(9);
+    this.kettleLabel = this.add.text(kettleX, kettleY - 24, '', {
+      fontSize: '13px', fontFamily: 'monospace', color: '#FFFFFF',
+    }).setOrigin(0.5).setDepth(16);
+
+    // Rice cooker label overlay
+    const rcX = tx(7);
+    const rcY = ty(9);
+    this.riceCookerLabel = this.add.text(rcX, rcY - 24, '', {
+      fontSize: '13px', fontFamily: 'monospace', color: '#FFFFFF',
+    }).setOrigin(0.5).setDepth(16);
 
     // Sink label overlay
     const sinkX = tx(13);
     const sinkY = ty(9);
-    this.sinkLabel = this.add.text(sinkX, sinkY - 16, '', {
-      fontSize: '7px', fontFamily: 'monospace', color: '#FFFFFF',
+    this.sinkLabel = this.add.text(sinkX, sinkY - 24, '', {
+      fontSize: '13px', fontFamily: 'monospace', color: '#FFFFFF',
     }).setOrigin(0.5).setDepth(16);
 
     // Trash label overlay
     const trashX = tx(15);
     const trashY = ty(9);
-    this.trashLabel = this.add.text(trashX, trashY - 16, '', {
-      fontSize: '7px', fontFamily: 'monospace', color: '#FFFFFF',
+    this.trashLabel = this.add.text(trashX, trashY - 24, '', {
+      fontSize: '13px', fontFamily: 'monospace', color: '#FFFFFF',
     }).setOrigin(0.5).setDepth(16);
 
     // Kitchen table overlays
     for (const kt of KITCHEN_TABLE_TILES) {
       const ktx = tx(kt.col);
       const kty = ty(kt.row);
-      const overlay = this.add.rectangle(ktx, kty, 20, 20, 0x000000, 0).setDepth(15);
+      const overlay = this.add.rectangle(ktx, kty, 30, 30, 0x000000, 0).setDepth(15);
       const label = this.add.text(ktx, kty, '', {
-        fontSize: '6px', fontFamily: 'monospace', color: '#FFFFFF',
+        fontSize: '11px', fontFamily: 'monospace', color: '#FFFFFF',
       }).setOrigin(0.5).setDepth(16);
       this.ktableOverlays.push(overlay);
       this.ktableLabels.push(label);
     }
 
     // Exit label
-    this.add.text(tx(7), ty(14) + 1, 'EXIT', {
-      fontSize: '8px', fontFamily: 'monospace', color: '#4A3728',
+    this.add.text(tx(7), ty(14) + 2, 'EXIT', {
+      fontSize: '12px', fontFamily: 'monospace', color: '#4A3728',
     }).setOrigin(0.5);
   }
 
@@ -549,8 +572,8 @@ export class ServeScene extends Phaser.Scene {
   // ============================
 
   private createPlayer(): void {
-    this.facingHighlight = this.add.rectangle(0, 0, TILE - 2, TILE - 2, 0xFFFF00, 0)
-      .setStrokeStyle(2, 0xFFFF00, 0.6)
+    this.facingHighlight = this.add.rectangle(0, 0, TILE - 3, TILE - 3, 0xFFFF00, 0)
+      .setStrokeStyle(3, 0xFFFF00, 0.6)
       .setDepth(10);
 
     this.player = this.add.image(tx(this.playerCol), ty(this.playerRow), `player_${this.facing}`)
@@ -615,7 +638,7 @@ export class ServeScene extends Phaser.Scene {
     }
 
     const t = REST_MAP[fr][fc];
-    const isInteractable = t === T || t === S || t === RB || t === O || t === V || t === U || t === SK || t === L || t === BW || t === TR;
+    const isInteractable = t === T || t === S || t === RB || t === O || t === KT || t === RC || t === RK || t === U || t === SK || t === L || t === BW || t === TR;
 
     this.facingHighlight.setPosition(tx(fc), ty(fr));
     this.facingHighlight.setAlpha(isInteractable ? 1 : 0);
@@ -732,33 +755,61 @@ export class ServeScene extends Phaser.Scene {
           else if (CookingSystem.heldItem === 'roasted_barley') this.showMsg('Picked up roasted barley');
         }
         break;
-      case 'stove': {
-        const si = station.index ?? 0;
-        err = CookingSystem.interactStove(si);
+      case 'kettle': {
+        err = CookingSystem.interactKettle();
         if (!err) {
-          const s = CookingSystem.stoves[si];
-          if (s.state === 'has_roasted_barley') this.showMsg('Added barley to stove');
-          else if (s.state === 'has_washed_rice') this.showMsg('Added washed rice to stove');
-          else if (s.state === 'has_rice_and_barley') this.showMsg('Added barley — ready to cook!');
-          else if (s.state === 'boiling_tea') this.showMsg('Hold Space to boil!');
-          else if (s.state === 'cooking_rice') this.showMsg('Hold Space to cook!');
-          else if (CookingSystem.heldItem === 'barley_rice') this.showMsg('Picked up Barley Rice!');
-          else {
-            const remaining = s.cupsRemaining;
-            if (s.state === 'empty' && remaining <= 0) {
-              this.showMsg('Filled cup! Stove empty.');
-            } else if (s.state === 'hot_with_tea') {
+          const k = CookingSystem.kettle;
+          if (k.state === 'has_roasted_barley') this.showMsg('Added barley to kettle');
+          else if (k.state === 'boiling_tea') this.showMsg('Hold Space to boil!');
+          else if (CookingSystem.heldItem === 'barley_tea') {
+            this.showMsg('Filled cup with tea!');
+          } else if (CookingSystem.heldItem === 'tray') {
+            const remaining = k.cupsRemaining;
+            if (k.state === 'empty' && remaining <= 0) {
+              this.showMsg('Filled cup! Kettle empty.');
+            } else {
               this.showMsg(`Filled cup! (${remaining} left)`);
+            }
+          } else if (k.state === 'hot_with_tea') {
+            this.showMsg(`Tea ready! (${k.cupsRemaining} cups left)`);
+          }
+        }
+        break;
+      }
+      case 'rice_cooker': {
+        err = CookingSystem.interactRiceCooker();
+        if (!err) {
+          const rc = CookingSystem.riceCooker;
+          if (rc.state === 'has_washed_rice') this.showMsg('Added washed rice to cooker');
+          else if (rc.state === 'has_washed_barley') this.showMsg('Added washed barley to cooker');
+          else if (rc.state === 'has_both') this.showMsg('Both added — ready to cook!');
+          else if (rc.state === 'cooking_rice') this.showMsg('Hold Space to cook!');
+          else if (CookingSystem.heldItem === 'barley_rice') this.showMsg('Picked up Barley Rice!');
+          else if (CookingSystem.heldItem === 'bowl_stack') {
+            const remaining = rc.servingsRemaining;
+            if (rc.state === 'empty' && remaining <= 0) {
+              this.showMsg('Filled bowl! Cooker empty.');
+            } else {
+              this.showMsg(`Filled bowl! (${remaining} left)`);
             }
           }
         }
         break;
       }
+      case 'recipe_book':
+        this.toggleRecipeModal();
+        break;
       case 'sink':
         err = CookingSystem.interactSink();
         if (!err) {
-          if (CookingSystem.sink.state === 'washing') this.showMsg('Hold Space to wash rice!');
-          else if (CookingSystem.heldItem === 'washed_rice') this.showMsg('Picked up washed rice');
+          if (CookingSystem.sink.state === 'washing') {
+            const what = CookingSystem.sinkItem === 'barley' ? 'barley' : 'rice';
+            this.showMsg(`Hold Space to wash ${what}!`);
+          } else if (CookingSystem.heldItem === 'washed_rice') {
+            this.showMsg('Rice washed!');
+          } else if (CookingSystem.heldItem === 'washed_barley') {
+            this.showMsg('Barley washed!');
+          }
         }
         break;
       case 'cups': {
@@ -774,7 +825,13 @@ export class ServeScene extends Phaser.Scene {
       }
       case 'bowl':
         err = CookingSystem.interactBowls();
-        if (!err) this.showMsg('Picked up bowl');
+        if (!err) {
+          if (CookingSystem.heldItem === 'bowl_stack') {
+            this.showMsg(`Stack: ${CookingSystem.stackTotal} bowls`);
+          } else {
+            this.showMsg('Picked up bowl');
+          }
+        }
         break;
       case 'trash':
         if (CookingSystem.heldItem === null) {
@@ -800,31 +857,40 @@ export class ServeScene extends Phaser.Scene {
     if (err) this.showMsg(err);
   }
 
-  private handleStoveHold(deltaSec: number): void {
+  private handleKettleHold(deltaSec: number): void {
     const { dx, dy } = DIR_DELTA[this.facing];
     const fc = this.playerCol + dx;
     const fr = this.playerRow + dy;
     const station = getStationAt(fc, fr);
 
-    if (station?.type === 'stove' && station.index !== undefined) {
-      const si = station.index;
-      if (CookingSystem.isStoveHoldState(si) && this.spaceKey.isDown) {
-        this.isHoldingStove = true;
-        const done = CookingSystem.updateStoveBoil(si, deltaSec);
-        if (done) {
-          this.isHoldingStove = false;
-          const stove = CookingSystem.stoves[si];
-          if (stove.state === 'hot_with_tea') {
-            this.showMsg('Tea ready! Fill cups here.');
-          } else if (stove.state === 'has_barley_rice') {
-            this.showMsg(`Barley Rice cooked! x${stove.servingsRemaining} servings.`);
-          }
-        }
-      } else if (!this.spaceKey.isDown && this.isHoldingStove) {
-        this.isHoldingStove = false;
+    if (station?.type === 'kettle' && CookingSystem.isKettleHoldState() && this.spaceKey.isDown) {
+      this.isHoldingKettle = true;
+      const done = CookingSystem.updateKettleBoil(deltaSec);
+      if (done) {
+        this.isHoldingKettle = false;
+        this.showMsg('Tea ready! Fill cups here.');
       }
-    } else if (!this.spaceKey.isDown && this.isHoldingStove) {
-      this.isHoldingStove = false;
+    } else if (!this.spaceKey.isDown && this.isHoldingKettle) {
+      this.isHoldingKettle = false;
+    }
+  }
+
+  private handleRiceCookerHold(deltaSec: number): void {
+    const { dx, dy } = DIR_DELTA[this.facing];
+    const fc = this.playerCol + dx;
+    const fr = this.playerRow + dy;
+    const station = getStationAt(fc, fr);
+
+    if (station?.type === 'rice_cooker' && CookingSystem.isRiceCookerHoldState() && this.spaceKey.isDown) {
+      this.isHoldingRiceCooker = true;
+      const done = CookingSystem.updateRiceCookerCook(deltaSec);
+      if (done) {
+        this.isHoldingRiceCooker = false;
+        const rc = CookingSystem.riceCooker;
+        this.showMsg(`Barley Rice cooked! x${rc.servingsRemaining} servings.`);
+      }
+    } else if (!this.spaceKey.isDown && this.isHoldingRiceCooker) {
+      this.isHoldingRiceCooker = false;
     }
   }
 
@@ -839,7 +905,8 @@ export class ServeScene extends Phaser.Scene {
         const done = CookingSystem.updateSinkWash(deltaSec);
         if (done) {
           this.isHoldingSink = false;
-          this.showMsg('Rice washed! Pick it up.');
+          const what = CookingSystem.sinkItem === 'barley' ? 'Barley' : 'Rice';
+          this.showMsg(`${what} washed! Pick it up.`);
         }
       }
     } else if (CookingSystem.isSinkHoldState() && !this.spaceKey.isDown && this.isHoldingSink) {
@@ -879,13 +946,13 @@ export class ServeScene extends Phaser.Scene {
     if (!held) return;
 
     const px = this.player.x;
-    const py = this.player.y - 18;
+    const py = this.player.y - 27;
 
     if (held === 'tray') {
       const total = CookingSystem.trayTotal;
-      const slotW = 6;
-      const slotH = 6;
-      const gap = 1;
+      const slotW = 9;
+      const slotH = 9;
+      const gap = 2;
       const totalW = total * slotW + (total - 1) * gap;
       const startX = px - totalW / 2;
 
@@ -906,12 +973,37 @@ export class ServeScene extends Phaser.Scene {
         this.heldIndicator.strokeRect(sx, py - slotH / 2, slotW, slotH);
         drawn++;
       }
+    } else if (held === 'bowl_stack') {
+      const total = CookingSystem.stackTotal;
+      const slotW = 9;
+      const slotH = 9;
+      const gap = 2;
+      const totalW = total * slotW + (total - 1) * gap;
+      const startX = px - totalW / 2;
+
+      let drawn = 0;
+      for (let i = 0; i < CookingSystem.stackFilled; i++) {
+        const sx = startX + drawn * (slotW + gap);
+        this.heldIndicator.fillStyle(0x8B6914, 1);
+        this.heldIndicator.fillRect(sx, py - slotH / 2, slotW, slotH);
+        this.heldIndicator.lineStyle(1, 0x000000, 0.4);
+        this.heldIndicator.strokeRect(sx, py - slotH / 2, slotW, slotH);
+        drawn++;
+      }
+      for (let i = 0; i < CookingSystem.stackEmpty; i++) {
+        const sx = startX + drawn * (slotW + gap);
+        this.heldIndicator.fillStyle(0xC0C0C0, 1);
+        this.heldIndicator.fillRect(sx, py - slotH / 2, slotW, slotH);
+        this.heldIndicator.lineStyle(1, 0x000000, 0.4);
+        this.heldIndicator.strokeRect(sx, py - slotH / 2, slotW, slotH);
+        drawn++;
+      }
     } else {
       const color = ITEM_COLORS[held] || 0x666666;
       this.heldIndicator.fillStyle(color, 1);
-      this.heldIndicator.fillCircle(px, py, 4);
+      this.heldIndicator.fillCircle(px, py, 6);
       this.heldIndicator.lineStyle(1, 0x000000, 0.5);
-      this.heldIndicator.strokeCircle(px, py, 4);
+      this.heldIndicator.strokeCircle(px, py, 6);
     }
   }
 
@@ -957,27 +1049,27 @@ export class ServeScene extends Phaser.Scene {
       const tableDef = TABLE_TILES.find(t => t.tableId === customer.tableId);
       if (!tableDef) continue;
       const bx = (tx(tableDef.cols[0]) + tx(tableDef.cols[1])) / 2;
-      const by = ty(tableDef.row) - 14;
+      const by = ty(tableDef.row) - 21;
 
       indicator.bubble.clear();
 
       if (customer.status === 'seated') {
         // White speech bubble with red "!"
-        this.drawSpeechBubble(indicator.bubble, bx, by, 22, 20);
+        this.drawSpeechBubble(indicator.bubble, bx, by, 33, 30);
         indicator.bubble.fillStyle(0xFF3333, 1);
-        indicator.bubble.fillRect(bx - 2, by - 7, 4, 8);
-        indicator.bubble.fillRect(bx - 2, by + 3, 4, 4);
+        indicator.bubble.fillRect(bx - 3, by - 11, 6, 12);
+        indicator.bubble.fillRect(bx - 3, by + 5, 6, 6);
       } else if (customer.status === 'ordered') {
         // Show N food icons (one per remaining serving)
         const remaining = customer.servingsNeeded - customer.servingsDelivered;
         const recipe = customer.orderedRecipeId ? RECIPES[customer.orderedRecipeId] : null;
         const iconColor = recipe?.iconColor ?? 0xC8A960;
         const recipeId = customer.orderedRecipeId;
-        const iconSize = 12;
-        const gap = 4;
+        const iconSize = 18;
+        const gap = 6;
         const totalW = remaining * iconSize + (remaining - 1) * gap;
-        const bubbleW = Math.max(26, totalW + 14);
-        const bubbleH = 24;
+        const bubbleW = Math.max(39, totalW + 21);
+        const bubbleH = 36;
 
         this.drawSpeechBubble(indicator.bubble, bx, by, bubbleW, bubbleH);
 
@@ -997,17 +1089,17 @@ export class ServeScene extends Phaser.Scene {
 
     // White rounded rectangle
     gfx.fillStyle(0xFFFFFF, 0.95);
-    gfx.fillRoundedRect(cx - halfW, cy - halfH, w, h, 4);
-    gfx.lineStyle(1.5, 0x333333, 0.6);
-    gfx.strokeRoundedRect(cx - halfW, cy - halfH, w, h, 4);
+    gfx.fillRoundedRect(cx - halfW, cy - halfH, w, h, 6);
+    gfx.lineStyle(2, 0x333333, 0.6);
+    gfx.strokeRoundedRect(cx - halfW, cy - halfH, w, h, 6);
 
     // Triangle pointer at bottom
     gfx.fillStyle(0xFFFFFF, 0.95);
-    gfx.fillTriangle(cx - 3, cy + halfH - 1, cx + 3, cy + halfH - 1, cx, cy + halfH + 5);
+    gfx.fillTriangle(cx - 5, cy + halfH - 2, cx + 5, cy + halfH - 2, cx, cy + halfH + 8);
     // Outline for triangle
-    gfx.lineStyle(1.5, 0x333333, 0.6);
-    gfx.lineBetween(cx - 3, cy + halfH - 1, cx, cy + halfH + 5);
-    gfx.lineBetween(cx + 3, cy + halfH - 1, cx, cy + halfH + 5);
+    gfx.lineStyle(2, 0x333333, 0.6);
+    gfx.lineBetween(cx - 5, cy + halfH - 2, cx, cy + halfH + 8);
+    gfx.lineBetween(cx + 5, cy + halfH - 2, cx, cy + halfH + 8);
   }
 
   private drawFoodIcon(gfx: Phaser.GameObjects.Graphics, cx: number, cy: number, size: number, color: number, recipeId: string): void {
@@ -1015,32 +1107,32 @@ export class ServeScene extends Phaser.Scene {
     if (recipeId === 'barley_tea') {
       // Cup shape
       gfx.fillStyle(color, 1);
-      gfx.fillRoundedRect(cx - half + 1, cy - half + 2, size - 2, size - 3, 2);
+      gfx.fillRoundedRect(cx - half + 2, cy - half + 3, size - 3, size - 5, 3);
       // Handle
-      gfx.lineStyle(1.5, color, 1);
-      gfx.strokeCircle(cx + half - 1, cy, 2);
+      gfx.lineStyle(2, color, 1);
+      gfx.strokeCircle(cx + half - 2, cy, 3);
       // Steam line
       gfx.lineStyle(1, 0xCCCCCC, 0.7);
-      gfx.lineBetween(cx - 1, cy - half, cx, cy - half - 2);
-      gfx.lineBetween(cx + 1, cy - half, cx + 2, cy - half - 2);
+      gfx.lineBetween(cx - 2, cy - half, cx, cy - half - 3);
+      gfx.lineBetween(cx + 2, cy - half, cx + 3, cy - half - 3);
     } else if (recipeId === 'barley_rice') {
       // Bowl shape
       gfx.fillStyle(color, 1);
-      gfx.fillRoundedRect(cx - half, cy - half + 2, size, size - 2, 4);
+      gfx.fillRoundedRect(cx - half, cy - half + 3, size, size - 3, 6);
       // Rice dots inside
       gfx.fillStyle(0xFFFFFF, 0.5);
-      gfx.fillCircle(cx - 2, cy, 1.5);
-      gfx.fillCircle(cx + 2, cy, 1.5);
-      gfx.fillCircle(cx, cy - 2, 1.5);
+      gfx.fillCircle(cx - 3, cy, 2);
+      gfx.fillCircle(cx + 3, cy, 2);
+      gfx.fillCircle(cx, cy - 3, 2);
       // Outline
       gfx.lineStyle(1, 0x000000, 0.3);
-      gfx.strokeRoundedRect(cx - half, cy - half + 2, size, size - 2, 4);
+      gfx.strokeRoundedRect(cx - half, cy - half + 3, size, size - 3, 6);
     } else {
       // Generic colored square
       gfx.fillStyle(color, 1);
-      gfx.fillRoundedRect(cx - half, cy - half, size, size, 3);
+      gfx.fillRoundedRect(cx - half, cy - half, size, size, 5);
       gfx.lineStyle(1, 0x000000, 0.3);
-      gfx.strokeRoundedRect(cx - half, cy - half, size, size, 3);
+      gfx.strokeRoundedRect(cx - half, cy - half, size, size, 5);
     }
   }
 
@@ -1066,12 +1158,12 @@ export class ServeScene extends Phaser.Scene {
           const midX = (tx(tableDef.cols[0]) + tx(tableDef.cols[1])) / 2;
           const midY = ty(tableDef.row);
           gfx.fillStyle(0x8B6914, 0.7);
-          gfx.fillCircle(midX - 6, midY - 3, 4);
-          gfx.fillCircle(midX + 5, midY + 2, 3);
-          gfx.fillCircle(midX - 2, midY + 4, 3);
+          gfx.fillCircle(midX - 9, midY - 5, 6);
+          gfx.fillCircle(midX + 8, midY + 3, 5);
+          gfx.fillCircle(midX - 3, midY + 6, 5);
           // "DIRTY" text label
           gfx.fillStyle(0x5A3A0A, 0.8);
-          gfx.fillRoundedRect(midX - 18, midY - 12, 36, 12, 2);
+          gfx.fillRoundedRect(midX - 27, midY - 18, 54, 18, 3);
         }
       } else {
         if (this.dirtyIndicators.has(table.id)) {
@@ -1097,48 +1189,51 @@ export class ServeScene extends Phaser.Scene {
       this.ovenProgressBg.setVisible(true);
       this.ovenProgressBar.setVisible(true);
       const ratio = Math.min(oven.timer / CookingSystem.ROAST_TIME, 1);
-      this.ovenProgressBar.width = 24 * ratio;
+      this.ovenProgressBar.width = 36 * ratio;
       this.ovenProgressBar.setFillStyle(0x44CC44);
       this.ovenLabel.setText('');
     } else if (oven.state === 'done') {
       this.ovenProgressBg.setVisible(true);
       this.ovenProgressBar.setVisible(true);
-      this.ovenProgressBar.width = 24;
+      this.ovenProgressBar.width = 36;
       this.ovenProgressBar.setFillStyle(0x44CC44);
       this.ovenLabel.setText('DONE').setColor('#44FF44');
     } else if (oven.state === 'burned') {
       this.ovenProgressBg.setVisible(true);
       this.ovenProgressBar.setVisible(true);
-      this.ovenProgressBar.width = 24;
+      this.ovenProgressBar.width = 36;
       this.ovenProgressBar.setFillStyle(0xFF4444);
       this.ovenLabel.setText('BURN').setColor('#FF4444');
     }
 
-    // Stoves (multiple)
-    for (let i = 0; i < CookingSystem.stoves.length; i++) {
-      const stove = CookingSystem.stoves[i];
-      const label = this.stoveLabels[i];
-      if (!label) continue;
+    // Kettle
+    const kettle = CookingSystem.kettle;
+    if (kettle.state === 'empty') {
+      this.kettleLabel.setText('');
+    } else if (kettle.state === 'has_roasted_barley') {
+      this.kettleLabel.setText('BOIL?').setColor('#FFAA00');
+    } else if (kettle.state === 'boiling_tea') {
+      const pct = Math.floor(CookingSystem.getKettleProgress() * 100);
+      this.kettleLabel.setText(`TEA ${pct}%`).setColor('#FFAA00');
+    } else if (kettle.state === 'hot_with_tea') {
+      this.kettleLabel.setText(`x${kettle.cupsRemaining}`).setColor('#44FF44');
+    }
 
-      if (stove.state === 'empty') {
-        label.setText('');
-      } else if (stove.state === 'has_roasted_barley') {
-        label.setText('BOIL?').setColor('#FFAA00');
-      } else if (stove.state === 'boiling_tea') {
-        const pct = Math.floor(CookingSystem.getBoilProgress(i) * 100);
-        label.setText(`TEA ${pct}%`).setColor('#FFAA00');
-      } else if (stove.state === 'hot_with_tea') {
-        label.setText(`x${stove.cupsRemaining}`).setColor('#44FF44');
-      } else if (stove.state === 'has_washed_rice') {
-        label.setText('+BRL?').setColor('#AADDAA');
-      } else if (stove.state === 'has_rice_and_barley') {
-        label.setText('COOK?').setColor('#FFAA00');
-      } else if (stove.state === 'cooking_rice') {
-        const pct = Math.floor(CookingSystem.getBoilProgress(i) * 100);
-        label.setText(`RICE ${pct}%`).setColor('#FFAA00');
-      } else if (stove.state === 'has_barley_rice') {
-        label.setText(`x${stove.servingsRemaining}`).setColor('#44FF44');
-      }
+    // Rice cooker
+    const rc = CookingSystem.riceCooker;
+    if (rc.state === 'empty') {
+      this.riceCookerLabel.setText('');
+    } else if (rc.state === 'has_washed_rice') {
+      this.riceCookerLabel.setText('+BRL?').setColor('#AADDAA');
+    } else if (rc.state === 'has_washed_barley') {
+      this.riceCookerLabel.setText('+RICE?').setColor('#AADDAA');
+    } else if (rc.state === 'has_both') {
+      this.riceCookerLabel.setText('COOK?').setColor('#FFAA00');
+    } else if (rc.state === 'cooking_rice') {
+      const pct = Math.floor(CookingSystem.getRiceCookerProgress() * 100);
+      this.riceCookerLabel.setText(`RICE ${pct}%`).setColor('#FFAA00');
+    } else if (rc.state === 'has_barley_rice') {
+      this.riceCookerLabel.setText(`x${rc.servingsRemaining}`).setColor('#44FF44');
     }
 
     // Sink
@@ -1175,6 +1270,11 @@ export class ServeScene extends Phaser.Scene {
           if (kt.trayFilled > 0) parts.push(`${kt.trayFilled}T`);
           if (kt.trayEmpty > 0) parts.push(`${kt.trayEmpty}C`);
           label.setText(parts.join('+'));
+        } else if (kt.item === 'bowl_stack') {
+          const parts: string[] = [];
+          if (kt.stackFilled > 0) parts.push(`${kt.stackFilled}R`);
+          if (kt.stackEmpty > 0) parts.push(`${kt.stackEmpty}B`);
+          label.setText(parts.join('+'));
         } else {
           label.setText(this.getItemShortName(kt.item));
         }
@@ -1189,9 +1289,11 @@ export class ServeScene extends Phaser.Scene {
     switch (item) {
       case 'barley': return 0xD4AA70;
       case 'roasted_barley': return 0x8B6914;
+      case 'washed_barley': return 0xB89960;
       case 'empty_cup': return 0xEEEEDD;
       case 'barley_tea': return 0xC8A960;
       case 'tray': return 0xAA8866;
+      case 'bowl_stack': return 0xD4B896;
       case 'rice': return 0xB8D4B8;
       case 'washed_rice': return 0xCCDDCC;
       case 'barley_rice': return 0xC4956A;
@@ -1204,9 +1306,11 @@ export class ServeScene extends Phaser.Scene {
     switch (item) {
       case 'barley': return 'BRL';
       case 'roasted_barley': return 'RST';
+      case 'washed_barley': return 'W.B';
       case 'empty_cup': return 'CUP';
       case 'barley_tea': return 'TEA';
       case 'tray': return 'TRAY';
+      case 'bowl_stack': return 'STK';
       case 'rice': return 'RICE';
       case 'washed_rice': return 'WSHD';
       case 'barley_rice': return 'B.R.';
@@ -1260,8 +1364,8 @@ export class ServeScene extends Phaser.Scene {
   // ============================
 
   private generateCustomerTextures(baseKey: string, appearance: CustomerAppearance): void {
-    const w = 24;
-    const h = 28;
+    const w = 36;
+    const h = 42;
 
     for (const dir of ['up', 'down', 'left', 'right'] as Direction[]) {
       const key = `${baseKey}_${dir}`;
@@ -1270,53 +1374,53 @@ export class ServeScene extends Phaser.Scene {
 
       // Hair
       gfx.fillStyle(appearance.hairColor, 1);
-      gfx.fillRoundedRect(3, 1, w - 4, 9, 4);
+      gfx.fillRoundedRect(5, 2, w - 6, 14, 6);
 
       // Head / face skin
       gfx.fillStyle(appearance.skinColor, 1);
       switch (dir) {
         case 'down':
-          gfx.fillRoundedRect(5, 5, w - 8, 8, 2);
+          gfx.fillRoundedRect(8, 8, w - 12, 12, 3);
           break;
         case 'up':
           break;
         case 'left':
-          gfx.fillRoundedRect(3, 5, 10, 8, 2);
+          gfx.fillRoundedRect(5, 8, 15, 12, 3);
           break;
         case 'right':
-          gfx.fillRoundedRect(w - 11, 5, 10, 8, 2);
+          gfx.fillRoundedRect(w - 17, 8, 15, 12, 3);
           break;
       }
 
       // Body (shirt)
       gfx.fillStyle(appearance.shirtColor, 1);
-      gfx.fillRoundedRect(2, 13, w - 2, 10, 3);
+      gfx.fillRoundedRect(3, 20, w - 3, 15, 5);
       gfx.lineStyle(1, 0x000000, 0.2);
-      gfx.strokeRoundedRect(2, 13, w - 2, 10, 3);
+      gfx.strokeRoundedRect(3, 20, w - 3, 15, 5);
 
       // Legs/pants
       gfx.fillStyle(0x445566, 1);
-      gfx.fillRoundedRect(4, 22, 8, 6, 2);
-      gfx.fillRoundedRect(14, 22, 8, 6, 2);
+      gfx.fillRoundedRect(6, 33, 12, 9, 3);
+      gfx.fillRoundedRect(21, 33, 12, 9, 3);
 
       // Eyes
       gfx.fillStyle(0x333333, 1);
       switch (dir) {
         case 'down':
-          gfx.fillRect(8, 8, 2, 2);
-          gfx.fillRect(16, 8, 2, 2);
+          gfx.fillRect(12, 12, 3, 3);
+          gfx.fillRect(24, 12, 3, 3);
           break;
         case 'up':
           break;
         case 'left':
-          gfx.fillRect(6, 8, 2, 2);
+          gfx.fillRect(9, 12, 3, 3);
           break;
         case 'right':
-          gfx.fillRect(18, 8, 2, 2);
+          gfx.fillRect(27, 12, 3, 3);
           break;
       }
 
-      gfx.generateTexture(key, w + 2, h + 2);
+      gfx.generateTexture(key, w + 3, h + 3);
       gfx.destroy();
     }
   }
@@ -1495,63 +1599,63 @@ export class ServeScene extends Phaser.Scene {
 
   private createHUD(): void {
     const w = this.cameras.main.width;
-    const panelY = ROWS * TILE; // 512
-    const panelH = this.cameras.main.height - panelY; // 200
+    const panelY = ROWS * TILE; // 768
+    const panelH = this.cameras.main.height - panelY; // 256
     const state = GameState.getInstance();
 
     // Background
     this.add.rectangle(w / 2, panelY + panelH / 2, w, panelH, 0x1a1a2e).setDepth(50);
-    this.add.rectangle(w / 2, panelY, w, 2, 0x333355).setDepth(50);
+    this.add.rectangle(w / 2, panelY, w, 3, 0x333355).setDepth(50);
 
     // Row 1: Title + Earnings
-    this.hudTitle = this.add.text(10, panelY + 10, `Day ${state.data.day} — Service`, {
-      fontSize: '14px', fontFamily: 'monospace', color: '#ffffff',
+    this.hudTitle = this.add.text(15, panelY + 15, `Day ${state.data.day} — Service`, {
+      fontSize: '21px', fontFamily: 'monospace', color: '#ffffff',
     }).setDepth(51);
-    this.hudEarnings = this.add.text(w - 10, panelY + 10, '$0', {
-      fontSize: '14px', fontFamily: 'monospace', color: '#FFD700',
+    this.hudEarnings = this.add.text(w - 15, panelY + 15, '$0', {
+      fontSize: '21px', fontFamily: 'monospace', color: '#FFD700',
     }).setOrigin(1, 0).setDepth(51);
 
     // Row 2: What player is holding
-    this.hudHeld = this.add.text(10, panelY + 32, '', {
-      fontSize: '12px', fontFamily: 'monospace', color: '#D4C4A8',
+    this.hudHeld = this.add.text(15, panelY + 48, '', {
+      fontSize: '18px', fontFamily: 'monospace', color: '#D4C4A8',
     }).setDepth(51);
 
     // Row 3: Kitchen status
-    this.hudKitchenStatus = this.add.text(10, panelY + 50, '', {
-      fontSize: '10px', fontFamily: 'monospace', color: '#999999',
-      wordWrap: { width: w - 20 },
+    this.hudKitchenStatus = this.add.text(15, panelY + 75, '', {
+      fontSize: '15px', fontFamily: 'monospace', color: '#999999',
+      wordWrap: { width: w - 30 },
     }).setDepth(51);
 
     // Boil/wash progress bar
-    this.hudBoilBg = this.add.rectangle(w / 2, panelY + 76, 220, 14, 0x333333)
+    this.hudBoilBg = this.add.rectangle(w / 2, panelY + 114, 330, 21, 0x333333)
       .setVisible(false).setDepth(51);
-    this.hudBoilBar = this.add.rectangle(w / 2 - 109, panelY + 76, 2, 10, 0x5599CC)
+    this.hudBoilBar = this.add.rectangle(w / 2 - 164, panelY + 114, 3, 15, 0x5599CC)
       .setVisible(false).setDepth(51);
 
     // Row 4: Context prompt
-    this.hudPrompt = this.add.text(w / 2, panelY + 100, '', {
-      fontSize: '14px', fontFamily: 'monospace', color: '#FFD700',
+    this.hudPrompt = this.add.text(w / 2, panelY + 150, '', {
+      fontSize: '21px', fontFamily: 'monospace', color: '#FFD700',
     }).setOrigin(0.5).setDepth(51);
 
     // Row 5: Action message
-    this.hudMsg = this.add.text(w / 2, panelY + 126, '', {
-      fontSize: '13px', fontFamily: 'monospace', color: '#4CAF50',
+    this.hudMsg = this.add.text(w / 2, panelY + 189, '', {
+      fontSize: '20px', fontFamily: 'monospace', color: '#4CAF50',
     }).setOrigin(0.5).setDepth(51);
 
     // Controls hints
-    this.add.text(w / 2, panelY + 160, 'Arrows/WASD: Move | Space: Act | Trash: Discard', {
-      fontSize: '9px', fontFamily: 'monospace', color: '#555555',
+    this.add.text(w / 2, panelY + 220, 'Arrows/WASD: Move | Space: Act | Trash: Discard', {
+      fontSize: '14px', fontFamily: 'monospace', color: '#555555',
     }).setOrigin(0.5).setDepth(51);
 
     const riceUnlocked = state.isCropUnlocked('rice');
     const hintText = riceUnlocked
-      ? 'TEA: BIN→OVEN→STOVE(boil)→CUPS→STOVE(fill) | RICE: RICE→SINK→STOVE+BRL→BOWL→STOVE'
-      : 'BIN→OVEN→STOVE(boil)→CUPS→STOVE(fill)→SERVE';
-    this.add.text(w / 2, panelY + 174, hintText, {
-      fontSize: '7px', fontFamily: 'monospace', color: '#555555',
+      ? 'TEA: BRL→OVEN→KETTLE→CUPS→KETTLE | RICE: RICE→SINK+BRL→SINK→COOKER→BOWL→COOKER'
+      : 'TEA: BARLEY→OVEN(roast)→KETTLE(boil)→CUPS→KETTLE(fill)';
+    this.add.text(w / 2, panelY + 237, hintText, {
+      fontSize: '11px', fontFamily: 'monospace', color: '#555555',
     }).setOrigin(0.5).setDepth(51);
-    this.add.text(w / 2, panelY + 186, 'Walk to EXIT to close service', {
-      fontSize: '9px', fontFamily: 'monospace', color: '#555555',
+    this.add.text(w / 2, panelY + 249, 'Walk to EXIT to close service', {
+      fontSize: '14px', fontFamily: 'monospace', color: '#555555',
     }).setOrigin(0.5).setDepth(51);
   }
 
@@ -1572,8 +1676,8 @@ export class ServeScene extends Phaser.Scene {
     const sink = CookingSystem.sink;
     let statusParts: string[] = [];
     if (oven.state !== 'empty') statusParts.push(`Oven: ${oven.state}`);
-    const activeStoves = CookingSystem.stoves.filter(s => s.state !== 'empty').length;
-    if (activeStoves > 0) statusParts.push(`Stoves: ${activeStoves}/${CookingSystem.stoves.length}`);
+    if (CookingSystem.kettle.state !== 'empty') statusParts.push(`Kettle: ${CookingSystem.kettle.state}`);
+    if (CookingSystem.riceCooker.state !== 'empty') statusParts.push(`Cooker: ${CookingSystem.riceCooker.state}`);
     if (sink.state !== 'empty') statusParts.push(`Sink: ${sink.state}`);
     statusParts.push(`Barley: ${state.data.inventory.barley || 0}`);
     if (state.isCropUnlocked('rice')) {
@@ -1582,33 +1686,39 @@ export class ServeScene extends Phaser.Scene {
     this.hudKitchenStatus.setText(statusParts.join(' | '));
 
     // Boil/wash/trash progress bar
-    // Check which stove player is facing
     const { dx: fdx, dy: fdy } = DIR_DELTA[this.facing];
     const facedStation = getStationAt(this.playerCol + fdx, this.playerRow + fdy);
-    const facedStoveIdx = facedStation?.type === 'stove' ? (facedStation.index ?? 0) : -1;
-    const showStoveBar = facedStoveIdx >= 0 && CookingSystem.isStoveHoldState(facedStoveIdx);
+    const showKettleBar = facedStation?.type === 'kettle' && CookingSystem.isKettleHoldState();
+    const showRiceCookerBar = facedStation?.type === 'rice_cooker' && CookingSystem.isRiceCookerHoldState();
     const showSinkBar = CookingSystem.isSinkHoldState();
     const showTrashBar = this.isHoldingTrash;
-    if (showStoveBar) {
+    if (showKettleBar) {
       this.hudBoilBg.setVisible(true);
       this.hudBoilBar.setVisible(true);
-      const ratio = CookingSystem.getBoilProgress(facedStoveIdx);
-      this.hudBoilBar.width = 216 * ratio;
-      this.hudBoilBar.x = w / 2 - 108 + this.hudBoilBar.width / 2;
+      const ratio = CookingSystem.getKettleProgress();
+      this.hudBoilBar.width = 324 * ratio;
+      this.hudBoilBar.x = w / 2 - 162 + this.hudBoilBar.width / 2;
       this.hudBoilBar.setFillStyle(0x5599CC);
+    } else if (showRiceCookerBar) {
+      this.hudBoilBg.setVisible(true);
+      this.hudBoilBar.setVisible(true);
+      const ratio = CookingSystem.getRiceCookerProgress();
+      this.hudBoilBar.width = 324 * ratio;
+      this.hudBoilBar.x = w / 2 - 162 + this.hudBoilBar.width / 2;
+      this.hudBoilBar.setFillStyle(0x88CC44);
     } else if (showTrashBar) {
       this.hudBoilBg.setVisible(true);
       this.hudBoilBar.setVisible(true);
       const ratio = CookingSystem.getTrashProgress();
-      this.hudBoilBar.width = 216 * ratio;
-      this.hudBoilBar.x = w / 2 - 108 + this.hudBoilBar.width / 2;
+      this.hudBoilBar.width = 324 * ratio;
+      this.hudBoilBar.x = w / 2 - 162 + this.hudBoilBar.width / 2;
       this.hudBoilBar.setFillStyle(0xFF6666);
     } else if (showSinkBar) {
       this.hudBoilBg.setVisible(true);
       this.hudBoilBar.setVisible(true);
       const ratio = CookingSystem.getWashProgress();
-      this.hudBoilBar.width = 216 * ratio;
-      this.hudBoilBar.x = w / 2 - 108 + this.hudBoilBar.width / 2;
+      this.hudBoilBar.width = 324 * ratio;
+      this.hudBoilBar.x = w / 2 - 162 + this.hudBoilBar.width / 2;
       this.hudBoilBar.setFillStyle(0x66BBFF);
     } else {
       this.hudBoilBg.setVisible(false);
@@ -1672,7 +1782,7 @@ export class ServeScene extends Phaser.Scene {
           if (CookingSystem.heldItem === null) {
             this.hudPrompt.setText('[Space] Pick up barley');
           } else {
-            this.hudPrompt.setText('Barley bin');
+            this.hudPrompt.setText('Barley station');
           }
           break;
         case 'rice_bin': {
@@ -1701,46 +1811,71 @@ export class ServeScene extends Phaser.Scene {
             this.hudPrompt.setText('Oven');
           }
           break;
-        case 'stove': {
-          const si = station.index ?? 0;
-          const s = CookingSystem.stoves[si];
-          if (!s) break;
-          if (s.state === 'empty') {
+        case 'kettle': {
+          const k = CookingSystem.kettle;
+          if (k.state === 'empty') {
             if (CookingSystem.heldItem === 'roasted_barley') {
-              this.hudPrompt.setText('[Space] Add to stove (tea)');
-            } else if (CookingSystem.heldItem === 'washed_rice') {
-              this.hudPrompt.setText('[Space] Add to stove (rice)');
+              this.hudPrompt.setText('[Space] Add to kettle');
             } else {
-              this.hudPrompt.setText('Stove');
+              this.hudPrompt.setText('Kettle');
             }
-          } else if (s.state === 'has_roasted_barley') {
+          } else if (k.state === 'has_roasted_barley') {
             this.hudPrompt.setText('[Space] Start boiling');
-          } else if (s.state === 'boiling_tea') {
+          } else if (k.state === 'boiling_tea') {
             this.hudPrompt.setText('[Hold Space] Boil tea');
-          } else if (s.state === 'hot_with_tea' &&
+          } else if (k.state === 'hot_with_tea' &&
             (CookingSystem.heldItem === 'empty_cup' || (CookingSystem.heldItem === 'tray' && CookingSystem.trayEmpty > 0))) {
             this.hudPrompt.setText('[Space] Fill cup');
-          } else if (s.state === 'hot_with_tea') {
-            this.hudPrompt.setText(`Stove hot (${s.cupsRemaining} cups left)`);
-          } else if (s.state === 'has_washed_rice') {
-            if (CookingSystem.heldItem === 'barley') {
-              this.hudPrompt.setText('[Space] Add barley');
+          } else if (k.state === 'hot_with_tea') {
+            this.hudPrompt.setText(`Kettle hot (${k.cupsRemaining} cups left)`);
+          }
+          break;
+        }
+        case 'rice_cooker': {
+          const gs2 = GameState.getInstance();
+          if (!gs2.isCropUnlocked('rice')) {
+            this.hudPrompt.setText('');
+            return;
+          }
+          const rc = CookingSystem.riceCooker;
+          if (rc.state === 'empty') {
+            if (CookingSystem.heldItem === 'washed_rice') {
+              this.hudPrompt.setText('[Space] Add washed rice');
+            } else if (CookingSystem.heldItem === 'washed_barley') {
+              this.hudPrompt.setText('[Space] Add washed barley');
             } else {
-              this.hudPrompt.setText('Needs barley...');
+              this.hudPrompt.setText('Rice Cooker');
             }
-          } else if (s.state === 'has_rice_and_barley') {
-            this.hudPrompt.setText('[Space] Start cooking');
-          } else if (s.state === 'cooking_rice') {
-            this.hudPrompt.setText('[Hold Space] Cook rice');
-          } else if (s.state === 'has_barley_rice') {
-            if (CookingSystem.heldItem === 'bowl') {
-              this.hudPrompt.setText(`[Space] Pick up Barley Rice (x${s.servingsRemaining})`);
+          } else if (rc.state === 'has_washed_rice') {
+            if (CookingSystem.heldItem === 'washed_barley') {
+              this.hudPrompt.setText('[Space] Add washed barley');
             } else {
-              this.hudPrompt.setText(`Need bowl! (x${s.servingsRemaining} ready)`);
+              this.hudPrompt.setText('Needs washed barley...');
+            }
+          } else if (rc.state === 'has_washed_barley') {
+            if (CookingSystem.heldItem === 'washed_rice') {
+              this.hudPrompt.setText('[Space] Add washed rice');
+            } else {
+              this.hudPrompt.setText('Needs washed rice...');
+            }
+          } else if (rc.state === 'has_both') {
+            this.hudPrompt.setText('[Space] Start cooking');
+          } else if (rc.state === 'cooking_rice') {
+            this.hudPrompt.setText('[Hold Space] Cook rice');
+          } else if (rc.state === 'has_barley_rice') {
+            if (CookingSystem.heldItem === 'bowl') {
+              this.hudPrompt.setText(`[Space] Pick up Barley Rice (x${rc.servingsRemaining})`);
+            } else if (CookingSystem.heldItem === 'bowl_stack' && CookingSystem.stackEmpty > 0) {
+              this.hudPrompt.setText(`[Space] Fill bowl (x${rc.servingsRemaining})`);
+            } else {
+              this.hudPrompt.setText(`Need bowl! (x${rc.servingsRemaining} ready)`);
             }
           }
           break;
         }
+        case 'recipe_book':
+          this.hudPrompt.setText('[Space] View recipes');
+          break;
         case 'bowl': {
           const gs = GameState.getInstance();
           if (!gs.isCropUnlocked('rice')) {
@@ -1749,6 +1884,11 @@ export class ServeScene extends Phaser.Scene {
           }
           if (CookingSystem.heldItem === null) {
             this.hudPrompt.setText('[Space] Pick up bowl');
+          } else if (CookingSystem.heldItem === 'bowl' || CookingSystem.heldItem === 'barley_rice'
+            || (CookingSystem.heldItem === 'bowl_stack' && CookingSystem.stackTotal < 4)) {
+            this.hudPrompt.setText('[Space] Add bowl to stack');
+          } else if (CookingSystem.heldItem === 'bowl_stack' && CookingSystem.stackTotal >= 4) {
+            this.hudPrompt.setText('Stack full!');
           } else {
             this.hudPrompt.setText('Hands full!');
           }
@@ -1762,20 +1902,25 @@ export class ServeScene extends Phaser.Scene {
           }
           break;
         case 'sink': {
-          const state = GameState.getInstance();
-          if (!state.isCropUnlocked('rice')) {
+          const gs3 = GameState.getInstance();
+          if (!gs3.isCropUnlocked('rice')) {
             this.hudPrompt.setText('');
             return;
           }
           const sk = CookingSystem.sink;
           if (sk.state === 'empty' && CookingSystem.heldItem === 'rice') {
             this.hudPrompt.setText('[Space] Wash rice');
+          } else if (sk.state === 'empty' && CookingSystem.heldItem === 'barley') {
+            this.hudPrompt.setText('[Space] Wash barley');
           } else if (sk.state === 'washing') {
-            this.hudPrompt.setText('[Hold Space] Washing rice...');
+            const what = CookingSystem.sinkItem === 'barley' ? 'barley' : 'rice';
+            this.hudPrompt.setText(`[Hold Space] Washing ${what}...`);
           } else if (sk.state === 'done' && CookingSystem.heldItem === null) {
-            this.hudPrompt.setText('[Space] Pick up washed rice');
+            const what = CookingSystem.sinkItem === 'barley' ? 'washed barley' : 'washed rice';
+            this.hudPrompt.setText(`[Space] Pick up ${what}`);
           } else if (sk.state === 'done') {
-            this.hudPrompt.setText('Washed rice ready!');
+            const what = CookingSystem.sinkItem === 'barley' ? 'Washed barley' : 'Washed rice';
+            this.hudPrompt.setText(`${what} ready!`);
           } else {
             this.hudPrompt.setText('Sink');
           }
@@ -1797,7 +1942,7 @@ export class ServeScene extends Phaser.Scene {
           const idx = station.index ?? 0;
           const kt = CookingSystem.kitchenTables[idx];
           if (kt?.item && CookingSystem.heldItem === null) {
-            const name = kt.item === 'tray' ? 'Tray' : (ITEM_NAMES[kt.item] || kt.item);
+            const name = kt.item === 'tray' ? 'Tray' : kt.item === 'bowl_stack' ? 'Stack' : (ITEM_NAMES[kt.item] || kt.item);
             this.hudPrompt.setText(`[Space] Pick up ${name}`);
           } else if (!kt?.item && CookingSystem.heldItem !== null) {
             this.hudPrompt.setText('[Space] Place item');
@@ -1816,6 +1961,120 @@ export class ServeScene extends Phaser.Scene {
     }
 
     this.hudPrompt.setText('');
+  }
+
+  // ============================
+  // Recipe Modal
+  // ============================
+
+  private toggleRecipeModal(): void {
+    if (this.recipeModalVisible) {
+      this.hideRecipeModal();
+    } else {
+      this.showRecipeModal();
+    }
+  }
+
+  private showRecipeModal(): void {
+    if (this.recipeModalVisible) return;
+    this.recipeModalVisible = true;
+
+    const w = this.cameras.main.width;
+    const h = this.cameras.main.height;
+    const state = GameState.getInstance();
+    const riceUnlocked = state.isCropUnlocked('rice');
+
+    const container = this.add.container(0, 0).setDepth(100);
+
+    // Semi-transparent background
+    const bg = this.add.rectangle(w / 2, h / 2, w, h, 0x000000, 0.7);
+    container.add(bg);
+
+    // Modal panel
+    const panelW = 600;
+    const panelH = 400;
+    const panel = this.add.rectangle(w / 2, h / 2, panelW, panelH, 0x2D2D4E, 0.95);
+    panel.setStrokeStyle(2, 0x5555AA);
+    container.add(panel);
+
+    // Title
+    const title = this.add.text(w / 2, h / 2 - panelH / 2 + 25, 'RECIPE BOOK', {
+      fontSize: '24px', fontFamily: 'monospace', color: '#FFD700',
+    }).setOrigin(0.5);
+    container.add(title);
+
+    let yOff = h / 2 - panelH / 2 + 60;
+    const leftX = w / 2 - panelW / 2 + 30;
+    const lineH = 18;
+
+    // Barley Tea recipe
+    const teaTitle = this.add.text(leftX, yOff, 'BARLEY TEA:', {
+      fontSize: '16px', fontFamily: 'monospace', color: '#C8A960',
+    });
+    container.add(teaTitle);
+    yOff += lineH + 4;
+
+    const teaSteps = [
+      '1. Pick up BARLEY from barley bin',
+      '2. ROAST at OVEN (wait 5s)',
+      '3. Add to KETTLE',
+      '4. BOIL at KETTLE (hold Space 3s)',
+      '5. Pick up CUP(s) from cup storage',
+      '6. FILL cup(s) at KETTLE',
+      '7. SERVE to customer!',
+    ];
+    for (const step of teaSteps) {
+      const txt = this.add.text(leftX + 10, yOff, step, {
+        fontSize: '13px', fontFamily: 'monospace', color: '#CCCCCC',
+      });
+      container.add(txt);
+      yOff += lineH;
+    }
+
+    yOff += 12;
+
+    // Barley Rice recipe (only if unlocked)
+    if (riceUnlocked) {
+      const riceTitle = this.add.text(leftX, yOff, 'BARLEY RICE:', {
+        fontSize: '16px', fontFamily: 'monospace', color: '#C4956A',
+      });
+      container.add(riceTitle);
+      yOff += lineH + 4;
+
+      const riceSteps = [
+        '1. Pick up RICE from rice bin → WASH at SINK',
+        '2. Pick up BARLEY from barley bin → WASH at SINK',
+        '3. Add both to RICE COOKER (either order)',
+        '4. COOK at COOKER (hold Space 3s)',
+        '5. Pick up BOWL(s) from bowl station',
+        '6. FILL bowl(s) at COOKER',
+        '7. SERVE to customer!',
+      ];
+      for (const step of riceSteps) {
+        const txt = this.add.text(leftX + 10, yOff, step, {
+          fontSize: '13px', fontFamily: 'monospace', color: '#CCCCCC',
+        });
+        container.add(txt);
+        yOff += lineH;
+      }
+    }
+
+    // Close hint
+    const closeHint = this.add.text(w / 2, h / 2 + panelH / 2 - 25, '[Space / Esc] Close', {
+      fontSize: '14px', fontFamily: 'monospace', color: '#888888',
+    }).setOrigin(0.5);
+    container.add(closeHint);
+
+    this.recipeModal = container;
+  }
+
+  private hideRecipeModal(): void {
+    if (!this.recipeModalVisible) return;
+    this.recipeModalVisible = false;
+    if (this.recipeModal) {
+      this.recipeModal.destroy();
+      this.recipeModal = undefined;
+    }
   }
 
   private showMsg(text: string): void {

@@ -1,7 +1,7 @@
 import GameState from '../state/GameState';
 import { RECIPES } from '../config/recipes';
 
-export type HeldItem = 'barley' | 'roasted_barley' | 'empty_cup' | 'barley_tea' | 'tray' | 'rice' | 'washed_rice' | 'barley_rice' | 'bowl' | null;
+export type HeldItem = 'barley' | 'roasted_barley' | 'washed_barley' | 'empty_cup' | 'barley_tea' | 'tray' | 'rice' | 'washed_rice' | 'barley_rice' | 'bowl' | 'bowl_stack' | null;
 
 export type OvenState = 'empty' | 'roasting' | 'done' | 'burned';
 
@@ -10,23 +10,30 @@ export interface OvenData {
   timer: number; // seconds elapsed since barley placed
 }
 
-export type StoveState =
+export type KettleState =
   | 'empty'
-  // Tea mode
   | 'has_roasted_barley'  // roasted barley added, ready to boil
   | 'boiling_tea'         // hold Space to boil
-  | 'hot_with_tea'        // ready to dispense cups
-  // Rice mode
-  | 'has_washed_rice'     // washed rice added, needs barley
-  | 'has_rice_and_barley' // both added, ready to cook
+  | 'hot_with_tea';       // ready to dispense cups
+
+export interface KettleData {
+  state: KettleState;
+  cupsRemaining: number;
+  boilProgress: number;
+}
+
+export type RiceCookerState =
+  | 'empty'
+  | 'has_washed_rice'     // washed rice added, needs washed barley
+  | 'has_washed_barley'   // washed barley added, needs washed rice
+  | 'has_both'            // both added, ready to cook
   | 'cooking_rice'        // hold Space to cook
   | 'has_barley_rice';    // done, pick up servings
 
-export interface StoveData {
-  state: StoveState;
-  cupsRemaining: number;     // tea mode only
-  servingsRemaining: number; // rice mode: how many barley rice servings left
-  boilProgress: number;      // 0-3 seconds (used for both tea boiling and rice cooking)
+export interface RiceCookerData {
+  state: RiceCookerState;
+  servingsRemaining: number;
+  cookProgress: number;
 }
 
 export type SinkState = 'empty' | 'washing' | 'done';
@@ -40,6 +47,8 @@ export interface KitchenTableData {
   item: HeldItem;
   trayEmpty: number;
   trayFilled: number;
+  stackEmpty: number;
+  stackFilled: number;
 }
 
 // Trash bin hold-to-discard
@@ -54,31 +63,31 @@ const WASH_TIME = 3;     // seconds to wash rice
 const CUPS_PER_BATCH = 5;
 const RICE_SERVINGS_PER_BATCH = 5;
 const MAX_TRAY = 4;
+const MAX_STACK = 4;
 const TRASH_HOLD_TIME = 1; // seconds to hold Space to discard
 
-const NUM_STOVES = 4;
 const NUM_KITCHEN_TABLES = 4;
-
-function createStove(): StoveData {
-  return { state: 'empty', cupsRemaining: 0, servingsRemaining: 0, boilProgress: 0 };
-}
 
 export class CookingSystem {
   // Oven
   static oven: OvenData = { state: 'empty', timer: 0 };
 
-  // Multiple stoves
-  static stoves: StoveData[] = Array.from({ length: NUM_STOVES }, () => createStove());
+  // Kettle (for tea)
+  static kettle: KettleData = { state: 'empty', cupsRemaining: 0, boilProgress: 0 };
 
-  // Sink (unlocked with rice)
+  // Rice cooker (for barley rice)
+  static riceCooker: RiceCookerData = { state: 'empty', servingsRemaining: 0, cookProgress: 0 };
+
+  // Sink (now available for both barley and rice washing)
   static sink: SinkData = { state: 'empty', washProgress: 0 };
+  static sinkItem: 'rice' | 'barley' | null = null;
 
   // Trash bin
   static trash: TrashData = { holdProgress: 0 };
 
   // Kitchen tables (4 surfaces)
   static kitchenTables: KitchenTableData[] = Array.from({ length: NUM_KITCHEN_TABLES }, () => ({
-    item: null as HeldItem, trayEmpty: 0, trayFilled: 0,
+    item: null as HeldItem, trayEmpty: 0, trayFilled: 0, stackEmpty: 0, stackFilled: 0,
   }));
 
   // Player held item
@@ -88,22 +97,35 @@ export class CookingSystem {
   static trayEmpty = 0;
   static trayFilled = 0;
 
+  // Bowl stack state (only meaningful when heldItem === 'bowl_stack')
+  static stackEmpty = 0;
+  static stackFilled = 0;
+
   static reset(): void {
     this.oven = { state: 'empty', timer: 0 };
-    this.stoves = Array.from({ length: NUM_STOVES }, () => createStove());
+    this.kettle = { state: 'empty', cupsRemaining: 0, boilProgress: 0 };
+    this.riceCooker = { state: 'empty', servingsRemaining: 0, cookProgress: 0 };
     this.sink = { state: 'empty', washProgress: 0 };
+    this.sinkItem = null;
     this.trash = { holdProgress: 0 };
     this.kitchenTables = Array.from({ length: NUM_KITCHEN_TABLES }, () => ({
-      item: null as HeldItem, trayEmpty: 0, trayFilled: 0,
+      item: null as HeldItem, trayEmpty: 0, trayFilled: 0, stackEmpty: 0, stackFilled: 0,
     }));
     this.heldItem = null;
     this.trayEmpty = 0;
     this.trayFilled = 0;
+    this.stackEmpty = 0;
+    this.stackFilled = 0;
   }
 
   /** Total cups on tray */
   static get trayTotal(): number {
     return this.trayEmpty + this.trayFilled;
+  }
+
+  /** Total bowls on stack */
+  static get stackTotal(): number {
+    return this.stackEmpty + this.stackFilled;
   }
 
   /** Check if player can serve a specific recipe */
@@ -112,7 +134,7 @@ export class CookingSystem {
       return this.heldItem === 'barley_tea' || (this.heldItem === 'tray' && this.trayFilled > 0);
     }
     if (recipeId === 'barley_rice') {
-      return this.heldItem === 'barley_rice';
+      return this.heldItem === 'barley_rice' || (this.heldItem === 'bowl_stack' && this.stackFilled > 0);
     }
     return false;
   }
@@ -127,7 +149,7 @@ export class CookingSystem {
         this.heldItem = null;
         return true;
       }
-      return false;
+      return this.serveOneRice();
     }
     return false;
   }
@@ -153,6 +175,18 @@ export class CookingSystem {
     return false;
   }
 
+  /** Remove one barley rice from bowl stack. Returns true if served. */
+  static serveOneRice(): boolean {
+    if (this.heldItem === 'bowl_stack' && this.stackFilled > 0) {
+      this.stackFilled--;
+      if (this.stackTotal === 0) {
+        this.heldItem = null;
+      }
+      return true;
+    }
+    return false;
+  }
+
   /** Upgrade single item to tray when adding a cup */
   private static upgradeToTray(): void {
     if (this.heldItem === 'empty_cup') {
@@ -163,6 +197,19 @@ export class CookingSystem {
       this.heldItem = 'tray';
       this.trayEmpty = 0;
       this.trayFilled = 1;
+    }
+  }
+
+  /** Upgrade single item to bowl stack when adding a bowl */
+  private static upgradeToStack(): void {
+    if (this.heldItem === 'bowl') {
+      this.heldItem = 'bowl_stack';
+      this.stackEmpty = 1;
+      this.stackFilled = 0;
+    } else if (this.heldItem === 'barley_rice') {
+      this.heldItem = 'bowl_stack';
+      this.stackEmpty = 0;
+      this.stackFilled = 1;
     }
   }
 
@@ -178,26 +225,27 @@ export class CookingSystem {
     }
   }
 
-  /** Update stove boil/cook progress when actively holding Space */
-  static updateStoveBoil(stoveIndex: number, deltaSec: number): boolean {
-    const stove = this.stoves[stoveIndex];
-    if (!stove) return false;
+  /** Update kettle boil progress when actively holding Space */
+  static updateKettleBoil(deltaSec: number): boolean {
+    if (this.kettle.state !== 'boiling_tea') return false;
+    this.kettle.boilProgress += deltaSec;
+    if (this.kettle.boilProgress >= BOIL_TIME) {
+      this.kettle.state = 'hot_with_tea';
+      this.kettle.boilProgress = BOIL_TIME;
+      return true;
+    }
+    return false;
+  }
 
-    if (stove.state === 'boiling_tea') {
-      stove.boilProgress += deltaSec;
-      if (stove.boilProgress >= BOIL_TIME) {
-        stove.state = 'hot_with_tea';
-        stove.boilProgress = BOIL_TIME;
-        return true;
-      }
-    } else if (stove.state === 'cooking_rice') {
-      stove.boilProgress += deltaSec;
-      if (stove.boilProgress >= BOIL_TIME) {
-        stove.state = 'has_barley_rice';
-        stove.servingsRemaining = RICE_SERVINGS_PER_BATCH;
-        stove.boilProgress = BOIL_TIME;
-        return true;
-      }
+  /** Update rice cooker cook progress when actively holding Space */
+  static updateRiceCookerCook(deltaSec: number): boolean {
+    if (this.riceCooker.state !== 'cooking_rice') return false;
+    this.riceCooker.cookProgress += deltaSec;
+    if (this.riceCooker.cookProgress >= BOIL_TIME) {
+      this.riceCooker.state = 'has_barley_rice';
+      this.riceCooker.servingsRemaining = RICE_SERVINGS_PER_BATCH;
+      this.riceCooker.cookProgress = BOIL_TIME;
+      return true;
     }
     return false;
   }
@@ -257,7 +305,7 @@ export class CookingSystem {
     return null;
   }
 
-  /** Interact with oven */
+  /** Interact with oven — accepts raw barley for roasting (tea workflow) */
   static interactOven(): string | null {
     if (this.oven.state === 'empty') {
       if (this.heldItem !== 'barley') return 'Need barley!';
@@ -284,116 +332,174 @@ export class CookingSystem {
     return null;
   }
 
-  /** Interact with a specific stove (multi-purpose: tea and rice modes) */
-  static interactStove(stoveIndex: number): string | null {
-    const stove = this.stoves[stoveIndex];
-    if (!stove) return 'No stove!';
+  /** Interact with kettle (tea workflow only) */
+  static interactKettle(): string | null {
+    const kettle = this.kettle;
 
-    // Empty stove — auto-detect mode based on held item
-    if (stove.state === 'empty') {
+    // Empty kettle — add roasted barley
+    if (kettle.state === 'empty') {
       if (this.heldItem === 'roasted_barley') {
-        // Tea mode
         this.heldItem = null;
-        stove.state = 'has_roasted_barley';
-        stove.cupsRemaining = CUPS_PER_BATCH;
-        stove.boilProgress = 0;
+        kettle.state = 'has_roasted_barley';
+        kettle.cupsRemaining = CUPS_PER_BATCH;
+        kettle.boilProgress = 0;
         return null;
       }
-      if (this.heldItem === 'washed_rice') {
-        // Rice mode step 1
-        this.heldItem = null;
-        stove.state = 'has_washed_rice';
-        stove.boilProgress = 0;
-        return null;
-      }
-      return 'Need roasted barley or washed rice!';
+      return 'Need roasted barley!';
     }
 
-    // Tea mode states
-    if (stove.state === 'has_roasted_barley') {
+    // Has roasted barley — start boiling
+    if (kettle.state === 'has_roasted_barley') {
       if (this.heldItem !== null) return 'Put item down first!';
-      stove.state = 'boiling_tea';
-      stove.boilProgress = 0;
+      kettle.state = 'boiling_tea';
+      kettle.boilProgress = 0;
       return null;
     }
-    if (stove.state === 'boiling_tea') {
+
+    if (kettle.state === 'boiling_tea') {
       return 'Hold Space to boil!';
     }
-    if (stove.state === 'hot_with_tea') {
-      if (stove.cupsRemaining <= 0) return 'Stove empty!';
 
-      // Single empty cup → single barley tea
+    // Hot with tea — fill cups
+    if (kettle.state === 'hot_with_tea') {
+      if (kettle.cupsRemaining <= 0) return 'Kettle empty!';
+
+      // Single empty cup -> single barley tea
       if (this.heldItem === 'empty_cup') {
         this.heldItem = 'barley_tea';
-        stove.cupsRemaining--;
-        if (stove.cupsRemaining <= 0) stove.state = 'empty';
+        kettle.cupsRemaining--;
+        if (kettle.cupsRemaining <= 0) kettle.state = 'empty';
         return null;
       }
 
-      // Tray with empty cups → fill one
+      // Tray with empty cups -> fill one
       if (this.heldItem === 'tray' && this.trayEmpty > 0) {
         this.trayEmpty--;
         this.trayFilled++;
-        stove.cupsRemaining--;
-        if (stove.cupsRemaining <= 0) stove.state = 'empty';
+        kettle.cupsRemaining--;
+        if (kettle.cupsRemaining <= 0) kettle.state = 'empty';
         return null;
       }
 
       return 'Need empty cup!';
     }
 
-    // Rice mode states
-    if (stove.state === 'has_washed_rice') {
-      if (this.heldItem === 'barley') {
-        // Add barley to complete ingredients
+    return null;
+  }
+
+  /** Interact with rice cooker (rice workflow only) */
+  static interactRiceCooker(): string | null {
+    const rc = this.riceCooker;
+
+    // Empty rice cooker — accepts washed_rice or washed_barley
+    if (rc.state === 'empty') {
+      if (this.heldItem === 'washed_rice') {
         this.heldItem = null;
-        stove.state = 'has_rice_and_barley';
+        rc.state = 'has_washed_rice';
+        rc.cookProgress = 0;
         return null;
       }
-      return 'Add barley!';
+      if (this.heldItem === 'washed_barley') {
+        this.heldItem = null;
+        rc.state = 'has_washed_barley';
+        rc.cookProgress = 0;
+        return null;
+      }
+      return 'Need washed rice or washed barley!';
     }
-    if (stove.state === 'has_rice_and_barley') {
+
+    // Has washed rice — needs washed barley
+    if (rc.state === 'has_washed_rice') {
+      if (this.heldItem === 'washed_barley') {
+        this.heldItem = null;
+        rc.state = 'has_both';
+        return null;
+      }
+      return 'Add washed barley!';
+    }
+
+    // Has washed barley — needs washed rice
+    if (rc.state === 'has_washed_barley') {
+      if (this.heldItem === 'washed_rice') {
+        this.heldItem = null;
+        rc.state = 'has_both';
+        return null;
+      }
+      return 'Add washed rice!';
+    }
+
+    // Has both — start cooking
+    if (rc.state === 'has_both') {
       if (this.heldItem !== null) return 'Put item down first!';
-      stove.state = 'cooking_rice';
-      stove.boilProgress = 0;
+      rc.state = 'cooking_rice';
+      rc.cookProgress = 0;
       return null;
     }
-    if (stove.state === 'cooking_rice') {
+
+    if (rc.state === 'cooking_rice') {
       return 'Hold Space to cook!';
     }
-    if (stove.state === 'has_barley_rice') {
-      // Requires bowl to pick up
-      if (this.heldItem !== 'bowl') return 'Need a bowl!';
-      this.heldItem = 'barley_rice';
-      stove.servingsRemaining--;
-      if (stove.servingsRemaining <= 0) stove.state = 'empty';
-      stove.boilProgress = 0;
-      return null;
+
+    // Has barley rice — fill bowls
+    if (rc.state === 'has_barley_rice') {
+      // Single bowl -> single barley rice
+      if (this.heldItem === 'bowl') {
+        this.heldItem = 'barley_rice';
+        rc.servingsRemaining--;
+        if (rc.servingsRemaining <= 0) rc.state = 'empty';
+        rc.cookProgress = 0;
+        return null;
+      }
+
+      // Bowl stack with empty bowls -> fill one
+      if (this.heldItem === 'bowl_stack' && this.stackEmpty > 0) {
+        this.stackEmpty--;
+        this.stackFilled++;
+        rc.servingsRemaining--;
+        if (rc.servingsRemaining <= 0) rc.state = 'empty';
+        return null;
+      }
+
+      return 'Need a bowl!';
     }
 
     return null;
   }
 
-  /** Interact with sink (wash rice) */
+  /** Interact with sink (wash rice or barley — only available after rice unlock) */
   static interactSink(): string | null {
     const state = GameState.getInstance();
     if (!state.isCropUnlocked('rice')) return 'Not unlocked yet!';
-
     if (this.sink.state === 'empty') {
-      if (this.heldItem !== 'rice') return 'Need rice!';
-      this.heldItem = null;
-      this.sink.state = 'washing';
-      this.sink.washProgress = 0;
-      return null;
+      if (this.heldItem === 'rice') {
+        this.sinkItem = 'rice';
+        this.heldItem = null;
+        this.sink.state = 'washing';
+        this.sink.washProgress = 0;
+        return null;
+      }
+      if (this.heldItem === 'barley') {
+        this.sinkItem = 'barley';
+        this.heldItem = null;
+        this.sink.state = 'washing';
+        this.sink.washProgress = 0;
+        return null;
+      }
+      return 'Need rice or barley!';
     }
     if (this.sink.state === 'washing') {
       return 'Hold Space to wash!';
     }
     if (this.sink.state === 'done') {
       if (this.heldItem !== null) return 'Hands full!';
-      this.heldItem = 'washed_rice';
+      if (this.sinkItem === 'rice') {
+        this.heldItem = 'washed_rice';
+      } else {
+        this.heldItem = 'washed_barley';
+      }
       this.sink.state = 'empty';
       this.sink.washProgress = 0;
+      this.sinkItem = null;
       return null;
     }
     return null;
@@ -403,20 +509,42 @@ export class CookingSystem {
   static interactBowls(): string | null {
     const state = GameState.getInstance();
     if (!state.isCropUnlocked('rice')) return 'Not unlocked yet!';
-    if (this.heldItem !== null) return 'Hands full!';
-    this.heldItem = 'bowl';
-    return null;
+
+    // Empty hands -> pick up single bowl
+    if (this.heldItem === null) {
+      this.heldItem = 'bowl';
+      return null;
+    }
+
+    // Holding single bowl or single barley rice -> upgrade to stack and add one empty
+    if (this.heldItem === 'bowl' || this.heldItem === 'barley_rice') {
+      this.upgradeToStack();
+      if (this.stackTotal < MAX_STACK) {
+        this.stackEmpty++;
+        return null;
+      }
+      return 'Stack full!';
+    }
+
+    // Already a stack -> add empty bowl
+    if (this.heldItem === 'bowl_stack') {
+      if (this.stackTotal >= MAX_STACK) return 'Stack full!';
+      this.stackEmpty++;
+      return null;
+    }
+
+    return 'Hands full!';
   }
 
   /** Interact with cup storage */
   static interactCups(): string | null {
-    // Empty hands → pick up single cup
+    // Empty hands -> pick up single cup
     if (this.heldItem === null) {
       this.heldItem = 'empty_cup';
       return null;
     }
 
-    // Holding single cup or single tea → upgrade to tray and add one empty
+    // Holding single cup or single tea -> upgrade to tray and add one empty
     if (this.heldItem === 'empty_cup' || this.heldItem === 'barley_tea') {
       this.upgradeToTray();
       // Now it's a tray, fall through to add another cup
@@ -427,7 +555,7 @@ export class CookingSystem {
       return 'Tray full!';
     }
 
-    // Already a tray → add empty cup
+    // Already a tray -> add empty cup
     if (this.heldItem === 'tray') {
       if (this.trayTotal >= MAX_TRAY) return 'Tray full!';
       this.trayEmpty++;
@@ -443,23 +571,31 @@ export class CookingSystem {
     if (!table) return 'No table!';
 
     if (this.heldItem !== null && table.item === null) {
-      // Place item (save tray state)
+      // Place item (save tray/stack state)
       table.item = this.heldItem;
       table.trayEmpty = this.trayEmpty;
       table.trayFilled = this.trayFilled;
+      table.stackEmpty = this.stackEmpty;
+      table.stackFilled = this.stackFilled;
       this.heldItem = null;
       this.trayEmpty = 0;
       this.trayFilled = 0;
+      this.stackEmpty = 0;
+      this.stackFilled = 0;
       return null;
     }
     if (this.heldItem === null && table.item !== null) {
-      // Pick up item (restore tray state)
+      // Pick up item (restore tray/stack state)
       this.heldItem = table.item;
       this.trayEmpty = table.trayEmpty;
       this.trayFilled = table.trayFilled;
+      this.stackEmpty = table.stackEmpty;
+      this.stackFilled = table.stackFilled;
       table.item = null;
       table.trayEmpty = 0;
       table.trayFilled = 0;
+      table.stackEmpty = 0;
+      table.stackFilled = 0;
       return null;
     }
     if (this.heldItem !== null && table.item !== null) {
@@ -473,6 +609,8 @@ export class CookingSystem {
     this.heldItem = null;
     this.trayEmpty = 0;
     this.trayFilled = 0;
+    this.stackEmpty = 0;
+    this.stackFilled = 0;
   }
 
   // --- Getters ---
@@ -484,31 +622,36 @@ export class CookingSystem {
     return 0;
   }
 
-  static getBoilProgress(stoveIndex: number): number {
-    const stove = this.stoves[stoveIndex];
-    if (!stove) return 0;
-    return stove.boilProgress / BOIL_TIME;
+  static getKettleProgress(): number {
+    return this.kettle.boilProgress / BOIL_TIME;
+  }
+
+  static getRiceCookerProgress(): number {
+    return this.riceCooker.cookProgress / BOIL_TIME;
   }
 
   static getWashProgress(): number {
     return this.sink.washProgress / WASH_TIME;
   }
 
-  /** Is a specific stove in a state that requires hold-Space? */
-  static isStoveHoldState(stoveIndex: number): boolean {
-    const stove = this.stoves[stoveIndex];
-    if (!stove) return false;
-    return stove.state === 'boiling_tea' || stove.state === 'cooking_rice';
+  /** Is the kettle in a state that requires hold-Space? */
+  static isKettleHoldState(): boolean {
+    return this.kettle.state === 'boiling_tea';
   }
 
-  /** Is any stove in a hold state? */
-  static isAnyStoveHoldState(): boolean {
-    return this.stoves.some((_, i) => this.isStoveHoldState(i));
+  /** Is the rice cooker in a state that requires hold-Space? */
+  static isRiceCookerHoldState(): boolean {
+    return this.riceCooker.state === 'cooking_rice';
   }
 
   /** Is the sink in a state that requires hold-Space? */
   static isSinkHoldState(): boolean {
     return this.sink.state === 'washing';
+  }
+
+  /** Is any station in a hold state? */
+  static isAnyHoldState(): boolean {
+    return this.isKettleHoldState() || this.isRiceCookerHoldState() || this.isSinkHoldState();
   }
 
   /** Get a display name for current held item */
@@ -519,9 +662,16 @@ export class CookingSystem {
       if (this.trayEmpty > 0) parts.push(`${this.trayEmpty} empty`);
       return `Tray (${parts.join(', ')})`;
     }
+    if (this.heldItem === 'bowl_stack') {
+      const parts: string[] = [];
+      if (this.stackFilled > 0) parts.push(`${this.stackFilled} rice`);
+      if (this.stackEmpty > 0) parts.push(`${this.stackEmpty} empty`);
+      return `Stack (${parts.join(', ')})`;
+    }
     switch (this.heldItem) {
       case 'barley': return 'Barley';
       case 'roasted_barley': return 'Roasted Barley';
+      case 'washed_barley': return 'Washed Barley';
       case 'empty_cup': return 'Empty Cup';
       case 'barley_tea': return 'Barley Tea';
       case 'rice': return 'Rice';
