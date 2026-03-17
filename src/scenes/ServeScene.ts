@@ -55,9 +55,9 @@ const REST_MAP: number[][] = [
   [F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F], // 8  kitchen floor
   [S,RB,F,O,F,KT,F,RC,F,F,U,BW,F,SK,F,TR], // 9  stations
   [F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F], // 10 kitchen floor
-  [RK,L,F,L,F,F,F,F,L,F,L,F,F,F,F,F], // 11 recipe book + kitchen tables (4)
+  [F,L,F,L,F,F,F,F,L,F,L,F,F,F,F,F], // 11 kitchen tables (4)
   [F,F,F,F,F,F,F,F,F,F,F,F,F,F,F,F], // 12
-  [F,F,F,F,F,F,F,P,F,F,F,F,F,F,F,F], // 13 path
+  [RK,F,F,F,F,F,F,P,F,F,F,F,F,F,F,F], // 13 recipe book + path
   [F,F,F,F,F,F,F,X,F,F,F,F,F,F,F,F], // 14 exit
   [W,W,W,W,W,W,W,W,W,W,W,W,W,W,W,W], // 15 south wall
 ];
@@ -119,7 +119,7 @@ interface CustomerAppearance {
 }
 
 const SKIN_TONES = [0xFFDBAC, 0xF1C27D, 0xE0AC69, 0xC68642, 0x8D5524];
-const HAIR_COLORS = [0x2C1B18, 0x4A3728, 0x8B6914, 0x090806, 0xB55239, 0xD4A574];
+const HAIR_COLORS = [0x2C1B18, 0x4A3728, 0x654321, 0x090806, 0xB55239, 0x2B1D0E];
 const SHIRT_COLORS = [0xFF6B6B, 0x4ECDC4, 0x45B7D1, 0xFFA07A, 0x98D8C8, 0xF7DC6F, 0xBB8FCE, 0x82E0AA, 0x6C5CE7, 0xFD79A8];
 
 const ENTRANCE_COL = 7;
@@ -284,8 +284,8 @@ export class ServeScene extends Phaser.Scene {
 
   // Player
   private player!: Phaser.GameObjects.Image;
-  private playerCol = 7;
-  private playerRow = 5;
+  private playerCol = 1;
+  private playerRow = 13;
   private facing: Direction = 'up';
   private isMoving = false;
 
@@ -303,6 +303,7 @@ export class ServeScene extends Phaser.Scene {
   // Recipe modal
   private recipeModal?: Phaser.GameObjects.Container;
   private recipeModalVisible = false;
+  private serviceStarted = false;
 
   // Hold-space state (for kettle boil, rice cooker cook, sink wash, trash discard)
   private isHoldingKettle = false;
@@ -346,8 +347,9 @@ export class ServeScene extends Phaser.Scene {
     this.isHoldingSink = false;
     this.isHoldingTrash = false;
     this.recipeModalVisible = false;
-    this.playerCol = 7;
-    this.playerRow = 5;
+    this.serviceStarted = false;
+    this.playerCol = 1;
+    this.playerRow = 13;
     this.facing = 'up';
     this.spawnedCount = 0;
     this.customerAvatars.clear();
@@ -369,8 +371,8 @@ export class ServeScene extends Phaser.Scene {
     this.createHUD();
     this.updateStationOverlays();
 
-    // Start spawning customers
-    this.scheduleNextSpawn();
+    // Show recipe book on start so player can review before serving
+    this.showRecipeModal();
 
     // Cleanup customer textures on shutdown
     this.events.on('shutdown', () => {
@@ -508,7 +510,7 @@ export class ServeScene extends Phaser.Scene {
     if (riceUnlocked) {
       this.sinkStationLabel = this.add.text(tx(13), labelBot, 'SINK', labelStyle).setOrigin(0.5);
     }
-    this.add.text(tx(0), ty(11) + TILE / 2 - 8, 'RECIPE', labelStyle).setOrigin(0.5);
+    this.add.text(tx(0), ty(13) + TILE / 2 - 8, 'RECIPE', labelStyle).setOrigin(0.5);
     this.add.text(tx(15), labelBot, 'TRASH', labelStyle).setOrigin(0.5);
 
     // Oven progress overlay
@@ -1629,8 +1631,8 @@ export class ServeScene extends Phaser.Scene {
     // Boil/wash progress bar
     this.hudBoilBg = this.add.rectangle(w / 2, panelY + 114, 330, 21, 0x333333)
       .setVisible(false).setDepth(51);
-    this.hudBoilBar = this.add.rectangle(w / 2 - 164, panelY + 114, 3, 15, 0x5599CC)
-      .setVisible(false).setDepth(51);
+    this.hudBoilBar = this.add.rectangle(w / 2 - 162, panelY + 114, 0, 15, 0x5599CC)
+      .setOrigin(0, 0.5).setVisible(false).setDepth(51);
 
     // Row 4: Context prompt
     this.hudPrompt = this.add.text(w / 2, panelY + 150, '', {
@@ -1695,30 +1697,30 @@ export class ServeScene extends Phaser.Scene {
     if (showKettleBar) {
       this.hudBoilBg.setVisible(true);
       this.hudBoilBar.setVisible(true);
-      const ratio = CookingSystem.getKettleProgress();
+      const ratio = Math.min(1, CookingSystem.getKettleProgress());
       this.hudBoilBar.width = 324 * ratio;
-      this.hudBoilBar.x = w / 2 - 162 + this.hudBoilBar.width / 2;
+
       this.hudBoilBar.setFillStyle(0x5599CC);
     } else if (showRiceCookerBar) {
       this.hudBoilBg.setVisible(true);
       this.hudBoilBar.setVisible(true);
-      const ratio = CookingSystem.getRiceCookerProgress();
+      const ratio = Math.min(1, CookingSystem.getRiceCookerProgress());
       this.hudBoilBar.width = 324 * ratio;
-      this.hudBoilBar.x = w / 2 - 162 + this.hudBoilBar.width / 2;
+
       this.hudBoilBar.setFillStyle(0x88CC44);
     } else if (showTrashBar) {
       this.hudBoilBg.setVisible(true);
       this.hudBoilBar.setVisible(true);
-      const ratio = CookingSystem.getTrashProgress();
+      const ratio = Math.min(1, CookingSystem.getTrashProgress());
       this.hudBoilBar.width = 324 * ratio;
-      this.hudBoilBar.x = w / 2 - 162 + this.hudBoilBar.width / 2;
+
       this.hudBoilBar.setFillStyle(0xFF6666);
     } else if (showSinkBar) {
       this.hudBoilBg.setVisible(true);
       this.hudBoilBar.setVisible(true);
-      const ratio = CookingSystem.getWashProgress();
+      const ratio = Math.min(1, CookingSystem.getWashProgress());
       this.hudBoilBar.width = 324 * ratio;
-      this.hudBoilBar.x = w / 2 - 162 + this.hudBoilBar.width / 2;
+
       this.hudBoilBar.setFillStyle(0x66BBFF);
     } else {
       this.hudBoilBg.setVisible(false);
@@ -1992,7 +1994,7 @@ export class ServeScene extends Phaser.Scene {
 
     // Modal panel
     const panelW = 600;
-    const panelH = 400;
+    const panelH = 500;
     const panel = this.add.rectangle(w / 2, h / 2, panelW, panelH, 0x2D2D4E, 0.95);
     panel.setStrokeStyle(2, 0x5555AA);
     container.add(panel);
@@ -2008,7 +2010,12 @@ export class ServeScene extends Phaser.Scene {
     const lineH = 18;
 
     // Barley Tea recipe
-    const teaTitle = this.add.text(leftX, yOff, 'BARLEY TEA:', {
+    const iconGfx = this.add.graphics().setDepth(101);
+    container.add(iconGfx);
+
+    const iconSize = 22;
+    this.drawFoodIcon(iconGfx, leftX + iconSize / 2, yOff + 9, iconSize, 0xC8A960, 'barley_tea');
+    const teaTitle = this.add.text(leftX + iconSize + 8, yOff, 'BARLEY TEA:', {
       fontSize: '16px', fontFamily: 'monospace', color: '#C8A960',
     });
     container.add(teaTitle);
@@ -2035,7 +2042,8 @@ export class ServeScene extends Phaser.Scene {
 
     // Barley Rice recipe (only if unlocked)
     if (riceUnlocked) {
-      const riceTitle = this.add.text(leftX, yOff, 'BARLEY RICE:', {
+      this.drawFoodIcon(iconGfx, leftX + iconSize / 2, yOff + 9, iconSize, 0xC4956A, 'barley_rice');
+      const riceTitle = this.add.text(leftX + iconSize + 8, yOff, 'BARLEY RICE:', {
         fontSize: '16px', fontFamily: 'monospace', color: '#C4956A',
       });
       container.add(riceTitle);
@@ -2059,6 +2067,12 @@ export class ServeScene extends Phaser.Scene {
       }
     }
 
+    // Reopen hint
+    const reopenHint = this.add.text(w / 2, h / 2 + panelH / 2 - 45, 'To view this screen again, come back to the RECIPE station and press SPACE', {
+      fontSize: '11px', fontFamily: 'monospace', color: '#888888', wordWrap: { width: panelW - 60 },
+    }).setOrigin(0.5);
+    container.add(reopenHint);
+
     // Close hint
     const closeHint = this.add.text(w / 2, h / 2 + panelH / 2 - 25, '[Space / Esc] Close', {
       fontSize: '14px', fontFamily: 'monospace', color: '#888888',
@@ -2074,6 +2088,11 @@ export class ServeScene extends Phaser.Scene {
     if (this.recipeModal) {
       this.recipeModal.destroy();
       this.recipeModal = undefined;
+    }
+    // Start spawning customers after player closes the initial recipe review
+    if (!this.serviceStarted) {
+      this.serviceStarted = true;
+      this.scheduleNextSpawn();
     }
   }
 

@@ -211,7 +211,7 @@ Display 3 tables and an Overcooked-style kitchen with stations.
 | R4.1.1 | Display 3 tables, each with 2 seats |
 | R4.1.2 | Tables positioned in row 1 of the 16x16 grid, evenly spaced |
 | R4.1.3 | Floating order indicators centered above each table show status: large "!" when seated, distinctive food icons when ordered (cup shape for tea, bowl shape for rice — 12px, matching menu card colors), dirty indicators on table surface when dirty |
-| R4.1.4 | Kitchen area in rows 8-12 with stations: barley station, rice station, recipe book, oven, 1 tea kettle, 1 rice cooker, cup storage, bowl storage, sink, trash bin, 4 kitchen tables. Recipe book available from start. Rice station, rice cooker, bowl station, and sink appear after rice unlock. Kitchen layout row 9: BARLEY, RICE, RECIPE, OVEN, floor, KETTLE, floor, COOKER, floor, floor, CUPS, BOWL, floor, SINK, floor, TRASH. Before rice unlock, locked station tiles (rice bin, rice cooker, bowl station, sink) are walkable floor — no invisible walls. |
+| R4.1.4 | Kitchen area in rows 8-13 with stations: barley station, rice station, recipe book, oven, 1 tea kettle, 1 rice cooker, cup storage, bowl storage, sink, trash bin, 4 kitchen tables. Recipe book at bottom-left (col 0, row 13) near exit. Rice station, rice cooker, bowl station, and sink appear after rice unlock. Kitchen layout row 9: BARLEY, RICE, floor, OVEN, floor, KETTLE, floor, COOKER, floor, floor, CUPS, BOWL, floor, SINK, floor, TRASH. Before rice unlock, locked station tiles (rice bin, rice cooker, bowl station, sink) are walkable floor — no invisible walls. |
 | R4.1.5 | Counter separates dining area (rows 0-6) from kitchen (rows 8-14) with walkable gap |
 | R4.1.6 | Display earnings tracker (revenue running total) |
 | R4.1.7 | HUD shows: held item, kitchen status (oven/kettle/cooker state), inventory counts, context prompts |
@@ -223,7 +223,7 @@ Customers arrive dynamically, gated by ingredient availability.
 | ID | Requirement |
 |----|-------------|
 | R4.2.1 | New customers only spawn when the restaurant has enough barley to fulfill at least one menu item |
-| R4.2.2 | Customers arrive dynamically: first after ~500ms, subsequent 3-5s after a table becomes available |
+| R4.2.2 | Customers arrive dynamically: first after player closes the initial recipe book, subsequent 3-5s after a table becomes available |
 | R4.2.3 | Each customer has a unique ID and a random group size (40% solo, 60% pair — max 2 for 2-seat tables) |
 
 ### R4.3 Customer Avatars
@@ -232,7 +232,7 @@ Each customer group member is represented as a distinct on-screen sprite.
 | ID | Requirement |
 |----|-------------|
 | R4.3.1 | Each group member is rendered as an individual avatar sprite |
-| R4.3.2 | Avatars (36x42px) have randomized appearances: skin tone (5 variants), hair color (6 variants), shirt color (10 variants), with pants |
+| R4.3.2 | Avatars (36x42px) have randomized appearances: skin tone (5 variants), hair color (6 variants — all contrasting with floor tile color), shirt color (10 variants), with pants |
 | R4.3.3 | Avatars have 4 directional textures (up/down/left/right) with visible eyes, hair, shirt, and pants |
 | R4.3.4 | Avatar textures are generated programmatically at spawn time |
 | R4.3.5 | Avatar textures are cleaned up when the customer leaves and on scene shutdown |
@@ -397,10 +397,14 @@ The kitchen has 1 rice cooker dedicated to making barley rice.
 
 | ID | Requirement |
 |----|-------------|
-| R4.9e.1 | Recipe book station is available in the kitchen from the start |
+| R4.9e.1 | Recipe book station is at bottom-left of kitchen (col 0, row 13), available from the start |
 | R4.9e.2 | Press Space at the recipe book station to open a modal showing step-by-step recipe instructions |
 | R4.9e.3 | Modal can be closed by pressing Space or Escape |
 | R4.9e.4 | Modal displays recipe flows for all unlocked recipes |
+| R4.9e.5 | Each recipe title is accompanied by the same food icon shown in customer speech bubbles (tea cup for barley tea, bowl for barley rice) |
+| R4.9e.6 | Recipe book opens automatically when ServeScene starts; customers do not arrive until player closes it |
+| R4.9e.7 | Modal includes hint text: "To view this screen again, come back to the RECIPE station and press SPACE" |
+| R4.9e.8 | Player spawns at (1, 13) next to the recipe book station when ServeScene starts |
 
 ### R4.10 Kitchen Stations — Cup Storage
 
@@ -458,7 +462,7 @@ The kitchen has 1 rice cooker dedicated to making barley rice.
 
 | TC | Steps | Expected Result |
 |----|-------|-----------------|
-| TC-4.1 | Enter Serve scene with Barley Tea on menu, 5 barley | 3 tables shown; customers begin arriving after ~500ms |
+| TC-4.1 | Enter Serve scene with Barley Tea on menu, 5 barley | Recipe book opens automatically; player at (1, 13) near recipe station; customers arrive after closing recipe book |
 | TC-4.2 | Observe first customer group spawn | Individual avatars appear at entrance and walk to table seats |
 | TC-4.3 | Walk to a seated customer's table, press Space | Group order taken; floating indicator shows food icons (1 or 2 per group size); inventory unchanged |
 | TC-4.4 | Walk to barley station, press Space | Pick up barley; inventory decreases by 1 |
@@ -711,7 +715,7 @@ Game state persists via localStorage.
 | R9.3.6 | Kitchen table overlays show placed items with color and short label |
 | R9.3.7 | Floating order indicators centered above tables: large "!" when seated, distinctive food icons (12px — cup shape for tea, bowl shape for rice, matching menu colors) when ordered, dirty indicators on table when dirty |
 | R9.3.8 | Yellow facing highlight on interactable tiles |
-| R9.3.9 | Boil progress bar in HUD during active boiling |
+| R9.3.9 | Boil/wash/cook/trash progress bar in HUD during active hold-space mechanics; fill is clamped to container width (never exceeds background) |
 | R9.3.10 | Held-item indicator above player: colored circle for single items, row of squares for tray or bowl stack |
 | R9.3.11 | Player sprite is 42x48px with hair, face, shirt, and pants detail |
 | R9.3.12 | Table tiles use full-bleed fill (no border) so adjacent tiles merge seamlessly |
@@ -732,7 +736,7 @@ Game state persists via localStorage.
 | 5 | Farm: Walk to EXIT | Transition to Menu; save written |
 | 6 | Menu: Toggle on Barley Tea | Card highlighted; inventory unchanged |
 | 7 | Menu: Click "Open Restaurant" | Menu saved; transitions to Serve scene |
-| 8 | Serve: Customers arrive and auto-seat | Floating "!" icon appears above table after customers sit (not during walk-in) |
+| 8 | Serve: Recipe book opens; close it with Space/Esc | Customers begin arriving after recipe book is closed |
 | 9 | Serve: Walk to table, press Space → take group order | Floating indicator shows food icons (1 per group member) |
 | 10 | Serve: Walk to BARLEY, press Space | Pick up barley (inventory -1) |
 | 11 | Serve: Walk to OVEN, press Space | Barley placed; roasting starts |

@@ -45,7 +45,7 @@ In the **serving** phase:
 * Customers are represented as individual avatar sprites with randomized appearances (skin tone, hair color, shirt color). Each group member is a distinct avatar
 * Customers walk in from the restaurant entrance to their assigned seats using grid-based pathfinding, with staggered timing so group members follow each other single-file
 * Customers have a 'walking' status while en route to their seats. They transition to 'seated' only after all group members finish walking. No indicators or interactions are possible while customers are walking.
-* Customers arrive and seat themselves at empty clean tables, trickling in dynamically (a new customer arrives 3-5 seconds after a table becomes available)
+* Customers arrive and seat themselves at empty clean tables, trickling in dynamically (first customer arrives after player closes the recipe book; subsequent customers 3-5 seconds after a table becomes available)
 * New customers only arrive when the restaurant has enough ingredients to fulfill at least one menu item
 * The player takes the customer's order by walking to the table and pressing Space. The entire group orders at once (one dish per person). For a group of 2, this means 2 servings are needed. Customers can only order food that the restaurant has enough ingredients to fulfill. If ingredients run out after a customer is seated but before ordering, the customer leaves
 * Serving is done one portion at a time. For a group of 2, the player must deliver 2 barley teas. The group only leaves after all servings are delivered.
@@ -65,7 +65,7 @@ In the **serving** phase:
   * There is a **tea kettle**. The kettle handles barley tea only: add roasted barley, then hold Space for 3 seconds to boil. One roasted barley produces 5 cups of barley tea. Once all 5 cups are dispensed, the kettle empties. The kettle has an indicator that shows its state.
   * There is a **rice cooker** (unlocked with rice). The rice cooker handles barley rice only: add washed rice + washed barley (in either order), then hold Space for 3 seconds to cook. Produces 5 servings of barley rice. Player picks up one serving at a time using a bowl.
   * There is a **sink** (unlocked with rice). Players wash barley or rice by holding Space for 3 seconds. Required prep step for barley rice (wash both rice and barley before cooking). Not needed for barley tea.
-  * There is a **recipe book station**. Players press Space to view a modal with step-by-step recipe instructions. Close with Space or Escape.
+  * There is a **recipe book station** at the bottom-left of the kitchen (col 0, row 13). The recipe book opens automatically when the serving phase starts so the player can review recipes before customers arrive. Customers only begin arriving after the player closes the recipe book. The modal shows step-by-step recipe instructions with food icons matching those in customer speech bubbles (tea cup for barley tea, bowl for barley rice), and includes a hint about reopening. Close with Space or Escape.
   * There is a **bowl station** (unlocked with rice). Players pick up bowls here. Bowls are required for plating barley rice from the rice cooker.
   * There is **cup storage**. Players retrieve empty cups from this area.
   * There is a **trash bin**. Players hold Space for 1 second while facing the trash bin to discard the currently held item.
@@ -109,7 +109,7 @@ Players will move a 2D avatar on screen and in order to farm and serve food, sim
 
 The player sprite is 42x48px with distinct hair, face/skin, shirt, and pants. A held-item indicator is rendered above the character (a colored circle for single items, or a row of squares for tray cups — gold for filled, white for empty).
 
-Customer avatars (36x42px) are procedurally generated with randomized features drawn from pools of 5 skin tones, 6 hair colors, and 10 shirt colors. Each avatar has 4 directional sprites (up/down/left/right) with visible eyes, hair, shirt, and pants.
+Customer avatars (36x42px) are procedurally generated with randomized features drawn from pools of 5 skin tones, 6 hair colors (all chosen to contrast with the floor tile color), and 10 shirt colors. Each avatar has 4 directional sprites (up/down/left/right) with visible eyes, hair, shirt, and pants.
 
 **Platform**
 Launch as browser game – no installs, no friction, highest reach
