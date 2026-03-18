@@ -64,8 +64,12 @@ export class MenuScene extends Phaser.Scene {
         .setStrokeStyle(3, 0x8B7355);
       this.toggleIndicators.set(id, indicator);
 
-      // Recipe name
-      this.add.text(78, y + 18, recipe.name, {
+      // Order icon (matches what customers show in speech bubbles)
+      const iconGfx = this.add.graphics();
+      this.drawFoodIcon(iconGfx, 90, y + 30, 24, recipe.iconColor, id);
+
+      // Recipe name (shifted right to make room for icon)
+      this.add.text(110, y + 18, recipe.name, {
         fontSize: '24px', fontFamily: 'monospace', color: '#4A3728',
       });
 
@@ -142,6 +146,36 @@ export class MenuScene extends Phaser.Scene {
         cardBg.setStrokeStyle(3, selected ? 0x6B8E5A : 0xC4A882);
       }
     });
+  }
+
+  private drawFoodIcon(gfx: Phaser.GameObjects.Graphics, cx: number, cy: number, size: number, color: number, recipeId: string): void {
+    const half = size / 2;
+    if (recipeId === 'barley_tea') {
+      // Cup shape
+      gfx.fillStyle(color, 1);
+      gfx.fillRoundedRect(cx - half + 2, cy - half + 3, size - 3, size - 5, 3);
+      gfx.lineStyle(2, color, 1);
+      gfx.strokeCircle(cx + half - 2, cy, 3);
+      gfx.lineStyle(1, 0xCCCCCC, 0.7);
+      gfx.lineBetween(cx - 2, cy - half, cx, cy - half - 3);
+      gfx.lineBetween(cx + 2, cy - half, cx + 3, cy - half - 3);
+    } else if (recipeId === 'barley_rice') {
+      // Bowl shape
+      gfx.fillStyle(color, 1);
+      gfx.fillRoundedRect(cx - half, cy - half + 3, size, size - 3, 6);
+      gfx.fillStyle(0xFFFFFF, 0.5);
+      gfx.fillCircle(cx - 3, cy, 2);
+      gfx.fillCircle(cx + 3, cy, 2);
+      gfx.fillCircle(cx, cy - 3, 2);
+      gfx.lineStyle(1, 0x000000, 0.3);
+      gfx.strokeRoundedRect(cx - half, cy - half + 3, size, size - 3, 6);
+    } else {
+      // Generic colored square
+      gfx.fillStyle(color, 1);
+      gfx.fillRoundedRect(cx - half, cy - half, size, size, 5);
+      gfx.lineStyle(1, 0x000000, 0.3);
+      gfx.strokeRoundedRect(cx - half, cy - half, size, size, 5);
+    }
   }
 
   private confirmMenu(): void {

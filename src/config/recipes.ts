@@ -39,7 +39,8 @@ export const RECIPES: Record<string, RecipeDef> = {
     profitPerServing: 3,
     prepSteps: [
       { type: 'wash', label: 'Wash rice at sink', duration: 3 },
-      { type: 'boil', label: 'Boil with barley at stove', duration: 3 },
+      { type: 'wash', label: 'Wash barley at sink', duration: 3 },
+      { type: 'boil', label: 'Cook in rice cooker', duration: 3 },
     ],
     servingsPerBatch: 5,
     iconColor: 0xC4956A, // warm golden brown for barley rice

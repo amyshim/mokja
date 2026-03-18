@@ -77,6 +77,12 @@ function isWalkable(col: number, row: number): boolean {
 function tx(col: number): number { return col * TILE + TILE / 2; }
 function ty(row: number): number { return row * TILE + TILE / 2; }
 
+// Action menu option
+interface MenuOption {
+  label: string;
+  action: () => void;
+}
+
 export class FarmScene extends Phaser.Scene {
   // Map
   private tileImages: Phaser.GameObjects.Image[][] = [];
@@ -96,16 +102,18 @@ export class FarmScene extends Phaser.Scene {
   private cursors!: Phaser.Types.Input.Keyboard.CursorKeys;
   private wasd!: Record<string, Phaser.Input.Keyboard.Key>;
 
-  // Game mode
-  private mode: 'plant' | 'water' | 'harvest' = 'plant';
-
-  // Selected crop for planting
-  private selectedCropId: string = 'barley';
+  // Action popup menu
+  private menuOpen = false;
+  private menuOptions: MenuOption[] = [];
+  private menuCursor = 0;
+  private menuContainer: Phaser.GameObjects.Container | null = null;
+  private menuOptionTexts: Phaser.GameObjects.Text[] = [];
+  private menuArrow: Phaser.GameObjects.Text | null = null;
+  private menuOriginY = 0; // stored for arrow updates
 
   // HUD elements
   private hudDay!: Phaser.GameObjects.Text;
   private hudWallet!: Phaser.GameObjects.Text;
-  private hudMode!: Phaser.GameObjects.Text;
   private hudInv!: Phaser.GameObjects.Text;
   private hudPrompt!: Phaser.GameObjects.Text;
   private hudMsg!: Phaser.GameObjects.Text;
@@ -124,7 +132,8 @@ export class FarmScene extends Phaser.Scene {
     this.playerCol = 7;
     this.playerRow = 11;
     this.facing = 'up';
-    this.mode = 'plant';
+    this.menuOpen = false;
+    this.menuContainer = null;
     this.cropOverlays.clear();
 
     this.setupInput();
@@ -136,7 +145,7 @@ export class FarmScene extends Phaser.Scene {
   }
 
   update(): void {
-    if (!this.isMoving) {
+    if (!this.isMoving && !this.menuOpen) {
       this.handleMovement();
     }
     this.updatePrompt();
@@ -159,21 +168,14 @@ export class FarmScene extends Phaser.Scene {
     this.input.keyboard!.addKey('SPACE').on('down', () => this.handleAction());
     this.input.keyboard!.addKey('ENTER').on('down', () => this.handleAction());
 
-    // Mode: 1/2/3
-    this.input.keyboard!.addKey('ONE').on('down', () => { this.mode = 'plant'; this.updateHUD(); });
-    this.input.keyboard!.addKey('TWO').on('down', () => { this.mode = 'water'; this.updateHUD(); });
-    this.input.keyboard!.addKey('THREE').on('down', () => { this.mode = 'harvest'; this.updateHUD(); });
-
-    // Cycle crop selection with Q
-    this.input.keyboard!.addKey('Q').on('down', () => {
-      if (this.mode === 'plant') {
-        this.cycleCrop();
-        this.updateHUD();
-      }
+    // Escape to close menu
+    this.input.keyboard!.addKey('ESC').on('down', () => {
+      if (this.menuOpen) this.closeMenu();
     });
 
     // Dev: 0 to skip a day
     this.input.keyboard!.addKey('ZERO').on('down', () => {
+      if (this.menuOpen) return;
       TimeSystem.devSkipDays(1);
       this.refreshPlots();
       this.showMsg('DEV: Skipped 1 day');
@@ -296,6 +298,12 @@ export class FarmScene extends Phaser.Scene {
   // ============================
 
   private handleAction(): void {
+    // If menu is open, confirm selection
+    if (this.menuOpen) {
+      this.confirmMenuSelection();
+      return;
+    }
+
     const { dx, dy } = DIR_DELTA[this.facing];
     const fc = this.playerCol + dx;
     const fr = this.playerRow + dy;
@@ -304,46 +312,199 @@ export class FarmScene extends Phaser.Scene {
 
     if (FARM_MAP[fr][fc] === P) {
       const idx = getPlotIndex(fc, fr);
-      if (idx !== null) this.interactPlot(idx);
+      if (idx !== null) this.openPlotMenu(idx);
     }
   }
 
-  private cycleCrop(): void {
+  // ============================
+  // Action Popup Menu
+  // ============================
+
+  private openPlotMenu(plotIdx: number): void {
     const state = GameState.getInstance();
-    const unlocked = state.data.unlockedCrops;
-    const idx = unlocked.indexOf(this.selectedCropId);
-    this.selectedCropId = unlocked[(idx + 1) % unlocked.length];
-  }
+    const status = FarmSystem.getPlotStatus(plotIdx);
+    const options: MenuOption[] = [];
 
-  private interactPlot(idx: number): void {
-    if (this.mode === 'plant') {
-      if (FarmSystem.plant(idx, this.selectedCropId)) {
-        this.showMsg(`Planted ${CROPS[this.selectedCropId]?.name}`);
-      } else {
-        this.showMsg('Plot occupied');
+    if (status === 'empty') {
+      // Offer to plant each unlocked crop
+      for (const cropId of state.data.unlockedCrops) {
+        const crop = CROPS[cropId];
+        if (!crop) continue;
+        options.push({
+          label: `Plant ${crop.name}`,
+          action: () => {
+            if (FarmSystem.plant(plotIdx, cropId)) {
+              this.showMsg(`Planted ${crop.name}`);
+            }
+            this.refreshPlots();
+            this.updateHUD();
+          },
+        });
       }
-    } else if (this.mode === 'water') {
-      if (FarmSystem.water(idx)) {
-        this.showMsg('Watered! (2x yield)');
-      } else {
-        const s = FarmSystem.getPlotStatus(idx);
-        if (s === 'empty') this.showMsg('Nothing to water');
-        else if (s === 'watered') this.showMsg('Already watered');
-        else if (s === 'ready') this.showMsg('Ready to harvest!');
-      }
-    } else {
-      const result = FarmSystem.harvest(idx);
-      if (result) {
-        this.showMsg(`Harvested ${result.quantity}x ${CROPS[result.cropId].name}!`);
-      } else {
-        const s = FarmSystem.getPlotStatus(idx);
-        if (s === 'empty') this.showMsg('Nothing here');
-        else if (s === 'growing') this.showMsg('Still growing...');
-      }
+    } else if (status === 'growing') {
+      options.push({
+        label: 'Water',
+        action: () => {
+          if (FarmSystem.water(plotIdx)) {
+            this.showMsg('Watered! (2x yield)');
+          }
+          this.refreshPlots();
+          this.updateHUD();
+        },
+      });
+    } else if (status === 'watered') {
+      // Nothing actionable — just info
+      options.push({
+        label: 'Already watered',
+        action: () => { this.showMsg('Already watered today'); },
+      });
+    } else if (status === 'ready') {
+      options.push({
+        label: 'Harvest',
+        action: () => {
+          const result = FarmSystem.harvest(plotIdx);
+          if (result) {
+            this.showMsg(`Harvested ${result.quantity}x ${CROPS[result.cropId].name}!`);
+          }
+          this.refreshPlots();
+          this.updateHUD();
+        },
+      });
     }
 
-    this.refreshPlots();
-    this.updateHUD();
+    options.push({
+      label: 'Cancel',
+      action: () => {},
+    });
+
+    this.showMenu(options);
+  }
+
+  private showMenu(options: MenuOption[]): void {
+    this.menuOptions = options;
+    this.menuCursor = 0;
+    this.menuOpen = true;
+    this.menuOptionTexts = [];
+
+    // Menu dimensions
+    const lineH = 32;
+    const padX = 20;
+    const padY = 14;
+    const arrowW = 22;
+    const menuW = 220;
+    const menuH = padY * 2 + options.length * lineH;
+    const mapW = COLS * TILE;
+    const mapH = ROWS * TILE;
+
+    // Position near the player — offset to the right, vertically centered
+    const playerPx = tx(this.playerCol);
+    const playerPy = ty(this.playerRow);
+    let menuX = playerPx + TILE;
+    let menuY = playerPy - menuH / 2;
+
+    // Clamp: keep fully inside the map area
+    const margin = 6;
+    if (menuX + menuW / 2 > mapW - margin) menuX = playerPx - TILE - menuW;
+    if (menuX - menuW / 2 < margin) menuX = margin + menuW / 2;
+    if (menuY < margin) menuY = margin;
+    if (menuY + menuH > mapH - margin) menuY = mapH - margin - menuH;
+
+    this.menuOriginY = menuY;
+
+    this.menuContainer = this.add.container(0, 0).setDepth(200);
+
+    // Shadow
+    const shadow = this.add.rectangle(
+      menuX + 4, menuY + 4 + menuH / 2,
+      menuW, menuH, 0x000000, 0.3,
+    );
+    this.menuContainer.add(shadow);
+
+    // Background
+    const bg = this.add.rectangle(
+      menuX, menuY + menuH / 2,
+      menuW, menuH, 0xFFF8E7,
+    ).setStrokeStyle(3, 0x4A3728);
+    this.menuContainer.add(bg);
+
+    // Inner border (double border like Pokemon)
+    const inner = this.add.rectangle(
+      menuX, menuY + menuH / 2,
+      menuW - 8, menuH - 8, 0xFFF8E7, 0,
+    ).setStrokeStyle(1, 0xC4A882);
+    this.menuContainer.add(inner);
+
+    // Option labels
+    for (let i = 0; i < options.length; i++) {
+      const optY = menuY + padY + i * lineH + lineH / 2;
+      const text = this.add.text(menuX - menuW / 2 + padX + arrowW, optY, options[i].label, {
+        fontSize: '18px', fontFamily: 'monospace', color: '#4A3728',
+      }).setOrigin(0, 0.5);
+      this.menuOptionTexts.push(text);
+      this.menuContainer.add(text);
+    }
+
+    // Cursor arrow
+    const arrowY = menuY + padY + this.menuCursor * lineH + lineH / 2;
+    this.menuArrow = this.add.text(menuX - menuW / 2 + padX, arrowY, '\u25B6', {
+      fontSize: '16px', fontFamily: 'monospace', color: '#4A3728',
+    }).setOrigin(0, 0.5);
+    this.menuContainer.add(this.menuArrow);
+
+    // Capture arrow keys for menu navigation while open
+    this.cursors.up.on('down', this.menuUp, this);
+    this.cursors.down.on('down', this.menuDown, this);
+    this.wasd.W.on('down', this.menuUp, this);
+    this.wasd.S.on('down', this.menuDown, this);
+  }
+
+  private menuUp = (): void => {
+    if (!this.menuOpen) return;
+    this.menuCursor = (this.menuCursor - 1 + this.menuOptions.length) % this.menuOptions.length;
+    this.updateMenuArrow();
+  };
+
+  private menuDown = (): void => {
+    if (!this.menuOpen) return;
+    this.menuCursor = (this.menuCursor + 1) % this.menuOptions.length;
+    this.updateMenuArrow();
+  };
+
+  private updateMenuArrow(): void {
+    if (!this.menuArrow) return;
+    const padY = 14;
+    const lineH = 32;
+    const arrowY = this.menuOriginY + padY + this.menuCursor * lineH + lineH / 2;
+    this.menuArrow.setY(arrowY);
+
+    // Highlight selected option
+    for (let i = 0; i < this.menuOptionTexts.length; i++) {
+      this.menuOptionTexts[i].setColor(i === this.menuCursor ? '#8B6914' : '#4A3728');
+    }
+  }
+
+  private confirmMenuSelection(): void {
+    const option = this.menuOptions[this.menuCursor];
+    this.closeMenu();
+    if (option) option.action();
+  }
+
+  private closeMenu(): void {
+    this.menuOpen = false;
+
+    // Remove navigation listeners
+    this.cursors.up.off('down', this.menuUp, this);
+    this.cursors.down.off('down', this.menuDown, this);
+    this.wasd.W.off('down', this.menuUp, this);
+    this.wasd.S.off('down', this.menuDown, this);
+
+    if (this.menuContainer) {
+      this.menuContainer.destroy(true);
+      this.menuContainer = null;
+    }
+    this.menuArrow = null;
+    this.menuOptionTexts = [];
+    this.menuOptions = [];
   }
 
   // ============================
@@ -418,32 +579,27 @@ export class FarmScene extends Phaser.Scene {
       fontSize: '21px', fontFamily: 'monospace', color: '#FFD700',
     }).setOrigin(1, 0);
 
-    // Row 2: Mode
-    this.hudMode = this.add.text(15, panelY + 48, '', {
-      fontSize: '20px', fontFamily: 'monospace', color: '#aaaaaa',
-    });
-
-    // Row 3: Inventory
-    this.hudInv = this.add.text(15, panelY + 78, '', {
+    // Row 2: Inventory
+    this.hudInv = this.add.text(15, panelY + 48, '', {
       fontSize: '17px', fontFamily: 'monospace', color: '#cccccc',
       wordWrap: { width: w - 30 },
     });
 
-    // Row 4: Context prompt
-    this.hudPrompt = this.add.text(w / 2, panelY + 143, '', {
+    // Row 3: Context prompt
+    this.hudPrompt = this.add.text(w / 2, panelY + 110, '', {
       fontSize: '21px', fontFamily: 'monospace', color: '#FFD700',
     }).setOrigin(0.5);
 
-    // Row 5: Action message
-    this.hudMsg = this.add.text(w / 2, panelY + 180, '', {
+    // Row 4: Action message
+    this.hudMsg = this.add.text(w / 2, panelY + 150, '', {
       fontSize: '20px', fontFamily: 'monospace', color: '#4CAF50',
     }).setOrigin(0.5);
 
     // Controls hint
-    this.add.text(w / 2, panelY + 222, 'Arrows/WASD: Move | Space: Act', {
+    this.add.text(w / 2, panelY + 222, 'Arrows/WASD: Move | Space: Interact', {
       fontSize: '14px', fontFamily: 'monospace', color: '#555555',
     }).setOrigin(0.5);
-    this.add.text(w / 2, panelY + 243, '1/2/3: Mode | 0: Dev skip day', {
+    this.add.text(w / 2, panelY + 243, 'Esc: Close menu | 0: Dev skip day', {
       fontSize: '14px', fontFamily: 'monospace', color: '#555555',
     }).setOrigin(0.5);
   }
@@ -454,17 +610,6 @@ export class FarmScene extends Phaser.Scene {
     this.hudDay.setText(`Day ${state.data.day}`);
     this.hudWallet.setText(`$${state.data.wallet}`);
 
-    const cropName = CROPS[this.selectedCropId]?.name || this.selectedCropId;
-    const plantLabel = state.data.unlockedCrops.length > 1
-      ? `1:[PLANT ${cropName}] Q:Switch`
-      : `1:[PLANT]`;
-    const modes: Record<string, string> = {
-      plant:   `${plantLabel}  2:Water  3:Harvest`,
-      water:   '1:Plant  2:[WATER]  3:Harvest',
-      harvest: '1:Plant  2:Water  3:[HARVEST]',
-    };
-    this.hudMode.setText(modes[this.mode]);
-
     const inv = state.data.inventory;
     const lines = Object.entries(inv)
       .filter(([_, qty]) => qty > 0)
@@ -474,6 +619,11 @@ export class FarmScene extends Phaser.Scene {
   }
 
   private updatePrompt(): void {
+    if (this.menuOpen) {
+      this.hudPrompt.setText('');
+      return;
+    }
+
     const { dx, dy } = DIR_DELTA[this.facing];
     const fc = this.playerCol + dx;
     const fr = this.playerRow + dy;
@@ -489,16 +639,13 @@ export class FarmScene extends Phaser.Scene {
       const idx = getPlotIndex(fc, fr);
       if (idx !== null) {
         const status = FarmSystem.getPlotStatus(idx);
-        if (this.mode === 'plant' && status === 'empty') {
-          const cropName = CROPS[this.selectedCropId]?.name || 'crop';
-          this.hudPrompt.setText(`[Space] Plant ${cropName}`);
-        } else if (this.mode === 'water' && status === 'growing') {
-          this.hudPrompt.setText('[Space] Water');
-        } else if (this.mode === 'harvest' && status === 'ready') {
-          this.hudPrompt.setText('[Space] Harvest');
-        } else {
-          this.hudPrompt.setText(`Plot: ${status}`);
-        }
+        const statusLabel: Record<string, string> = {
+          empty: 'Empty plot',
+          growing: 'Growing...',
+          watered: 'Watered',
+          ready: 'Ready!',
+        };
+        this.hudPrompt.setText(`[Space] ${statusLabel[status] || status}`);
         return;
       }
     }
