@@ -62,15 +62,18 @@ export class ServingSystem {
     state.data.dayResults.customersServed++;
     state.data.wallet += revenue;
 
-    // Track cumulative barley teas served
+    // Track cumulative servings by recipe
     if (customer.orderedRecipeId === 'barley_tea') {
       state.data.totalTeasServed++;
+      state.data.dayResults.teasServedToday++;
+    } else if (customer.orderedRecipeId === 'barley_rice') {
+      state.data.totalRiceServed++;
     }
 
     customer.servingsDelivered++;
     const allDone = customer.servingsDelivered >= customer.servingsNeeded;
     if (allDone) {
-      customer.status = 'served';
+      customer.status = 'enjoying';
     }
     return { revenue, allDone };
   }

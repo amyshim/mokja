@@ -32,7 +32,10 @@ function migrateState(saved: any): void {
     delete saved.dayResults.tips;
   }
   if (!('customersServed' in (saved.dayResults || {}))) {
-    saved.dayResults = { revenue: 0, customersServed: 0 };
+    saved.dayResults = { revenue: 0, customersServed: 0, teasServedToday: 0 };
+  }
+  if (saved.dayResults && saved.dayResults.teasServedToday === undefined) {
+    saved.dayResults.teasServedToday = 0;
   }
 
   // Simplify menu items (remove servingsPlanned/servingsPrepared)
@@ -75,6 +78,14 @@ function migrateState(saved: any): void {
   }
   if (!saved.unlockedRecipes) {
     saved.unlockedRecipes = ['barley_tea'];
+  }
+
+  // Rice serving tracking (v4)
+  if (saved.totalRiceServed === undefined) {
+    saved.totalRiceServed = 0;
+  }
+  if (saved.firstRiceServiceDone === undefined) {
+    saved.firstRiceServiceDone = false;
   }
 }
 

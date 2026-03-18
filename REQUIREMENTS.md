@@ -91,7 +91,7 @@ Player waters growing crops for a yield bonus.
 |----|-------------|
 | R2.4.1 | In Water mode, pressing Space on a growing (non-ready) plot marks it as watered |
 | R2.4.2 | Each crop can only be watered once per day |
-| R2.4.3 | Watering an already-watered crop has no effect |
+| R2.4.3 | Watering an already-watered crop shows "Already watered" as a non-selectable message (muted, italic) in the contextual menu — not an actionable option |
 | R2.4.4 | Cannot water an empty plot |
 | R2.4.5 | Cannot water a ready-to-harvest crop |
 | R2.4.6 | Watered plots show distinct visual indicator (darker soil) |
@@ -134,7 +134,7 @@ Player walks to EXIT tile to proceed to Menu phase.
 | TC-2.1 | Select Plant mode, face empty plot, press Space | Barley planted; inventory unchanged (seeds are free); plot shows growing state |
 | TC-2.2 | Try to plant on an occupied plot | Nothing happens; existing crop unchanged |
 | TC-2.3 | Select Water mode, face a growing crop, press Space | Plot marked as watered; visual changes |
-| TC-2.4 | Water an already-watered crop | No change; still shows watered once |
+| TC-2.4 | Water an already-watered crop | "Already watered" shown as non-selectable message (muted, italic) in contextual menu |
 | TC-2.5 | Try to water an empty plot | Nothing happens |
 | TC-2.6 | Harvest a ready, unwatered barley | Yields 2 barley; plot clears to empty |
 | TC-2.7 | Harvest a ready, watered barley | Yields 4 barley; plot clears to empty |
@@ -210,7 +210,7 @@ Display 3 tables and an Overcooked-style kitchen with stations.
 |----|-------------|
 | R4.1.1 | Display 3 tables, each with 2 seats |
 | R4.1.2 | Tables positioned in row 1 of the 16x16 grid, evenly spaced |
-| R4.1.3 | Floating order indicators centered above each table show status: large "!" when seated, distinctive food icons when ordered (cup shape for tea, bowl shape for rice — 12px, matching menu card colors), dirty indicators on table surface when dirty |
+| R4.1.3 | Floating order indicators centered above each table show status: large "!" when seated, distinctive food icons when ordered (cup shape for tea, bowl shape for rice — 12px, matching menu card colors). When dirty, brown splatters and a "Dirty" text label appear on the table surface |
 | R4.1.4 | Kitchen area in rows 8-13 with stations: barley station, rice station, recipe book, oven, 1 tea kettle, 1 rice cooker, cup storage, bowl storage, sink, trash bin, 4 kitchen tables. Recipe book at bottom-left (col 0, row 13) near exit. Rice station, rice cooker, bowl station, and sink appear after rice unlock. Kitchen layout row 9: BARLEY, RICE, floor, OVEN, floor, KETTLE, floor, COOKER, floor, floor, CUPS, BOWL, floor, SINK, floor, TRASH. Before rice unlock, locked station tiles (rice bin, rice cooker, bowl station, sink) are walkable floor — no invisible walls. |
 | R4.1.5 | Counter separates dining area (rows 0-6) from kitchen (rows 8-14) with walkable gap |
 | R4.1.6 | Display earnings tracker (revenue running total) |
@@ -225,6 +225,9 @@ Customers arrive dynamically, gated by ingredient availability.
 | R4.2.1 | New customers only spawn when the restaurant has enough barley to fulfill at least one menu item |
 | R4.2.2 | Customers arrive dynamically: first after player closes the initial recipe book, subsequent 3-5s after a table becomes available |
 | R4.2.3 | Each customer has a unique ID and a random group size (40% solo, 60% pair — max 2 for 2-seat tables) |
+| R4.2.4 | Before rice milestone: stop spawning new customers after 10 barley teas served that day (applies every service day until milestone is reached) |
+| R4.2.5 | On the first day barley rice is served: stop spawning new customers after 10 barley rice servings delivered |
+| R4.2.6 | Serving caps only stop new arrivals — customers already seated are still served |
 
 ### R4.3 Customer Avatars
 Each customer group member is represented as a distinct on-screen sprite.
@@ -267,7 +270,7 @@ Player takes orders and serves prepared food. Cooking is decoupled from ordering
 | R4.5.5 | Customer status changes from "seated" to "ordered"; floating indicator shows food icons (one per serving needed) |
 | R4.5.6 | **Serve:** Press Space at an ordered customer's table while holding the correct item (barley_tea single or on tray; barley_rice single or on bowl stack) to deliver one serving |
 | R4.5.7 | Revenue ($2) added to wallet and dayResults per serving delivered |
-| R4.5.8 | Each serve increments servingsDelivered. When servingsDelivered >= servingsNeeded, status becomes "served"; avatars walk out; table marked dirty |
+| R4.5.8 | Each serve increments servingsDelivered. When servingsDelivered >= servingsNeeded, status becomes "enjoying" (see R4.12a) |
 | R4.5.9 | If player interacts with ordered table without holding barley_tea, message says "Need Barley Tea to serve!" |
 | R4.5.10 | Multiple orders can be in progress simultaneously (no one-at-a-time constraint) |
 | R4.5.11 | Floating indicator updates to show remaining servings as food icons decrease with each delivery |
@@ -278,7 +281,7 @@ Player carries items through the kitchen, with optional tray for multiple cups.
 | ID | Requirement |
 |----|-------------|
 | R4.6.1 | Player can hold one item at a time: barley, washed_barley, roasted_barley, empty_cup, barley_tea, rice, washed_rice, bowl, barley_rice, or a stack (bowl_stack) |
-| R4.6.2 | **Tray mechanic:** Picking up a second cup from cup storage while holding empty_cup or barley_tea upgrades to a tray |
+| R4.6.2 | **Tray mechanic:** Picking up a second cup from cup storage while holding empty_cup or barley_tea upgrades to a tray. The first time the tray upgrade triggers each service session, a hint message ("You can carry up to 4 cups at a time!") is shown |
 | R4.6.3 | Tray holds up to 4 slots — any mix of empty cups and filled barley tea |
 | R4.6.4 | Tray cups are filled one at a time at the hot kettle (no need to set tray down) |
 | R4.6.5 | Serving one customer removes one filled cup from the tray |
@@ -430,7 +433,11 @@ The kitchen has 1 rice cooker dedicated to making barley rice.
 
 | ID | Requirement |
 |----|-------------|
-| R4.12.1 | After being served, customer avatars walk from their seats back to the entrance and are destroyed |
+| R4.12.0a | **Enjoying phase:** After all servings delivered, customer status becomes "enjoying". Cups (barley tea) or bowls (barley rice) appear on the table — one per serving. Steam particles rise from each cup/bowl. |
+| R4.12.0b | Customers remain seated for 5-10 seconds (randomized per group) during enjoying phase. Table stays occupied. |
+| R4.12.0c | HUD shows "Enjoying..." when player faces a table with enjoying customers |
+| R4.12.0d | After enjoying timer expires, status transitions to "served", cups/bowls and steam are removed, and avatars walk out |
+| R4.12.1 | After enjoying phase ends, customer avatars walk from their seats back to the entrance and are destroyed |
 | R4.12.2 | Walk-out uses staggered timing (200ms between group members) |
 | R4.12.3 | If walk-out triggered while avatars are walking in, in-progress tweens are killed and walk-out starts from current position |
 | R4.12.4 | After customer leaves, table becomes dirty |
@@ -500,6 +507,15 @@ The kitchen has 1 rice cooker dedicated to making barley rice.
 | TC-4.19 | Walk to EXIT tile | Transitions to Accounting; state saved |
 | TC-4.20 | Ingredients run out before next customer spawns | No more customers arrive |
 | TC-4.21 | Customer seated but no ingredients when taking order | Customer leaves; table marked dirty |
+| TC-4.37 | Serve a group of 2 barley teas, observe table after last serve | Cups appear on table (2 cups); steam rises; customers sit for 5-10s then walk out |
+| TC-4.38 | Serve barley rice to a solo customer, observe table | Bowl appears on table (1 bowl); steam rises; customer sits then walks out |
+| TC-4.39 | Face a table during enjoying phase | HUD shows "Enjoying..." |
+| TC-4.40 | Pre-milestone: serve 10 barley teas in one day | No new customers arrive after 10th tea; seated customers can still be served |
+| TC-4.41 | Pre-milestone: serve 8 teas day 1, serve 10 teas day 2 | Day 2 stops at 10 teas (daily counter resets) |
+| TC-4.42 | First day with barley rice on menu: serve 10 rice | No new customers after 10th rice serving |
+| TC-4.43 | Second day with barley rice on menu | No rice serving cap (firstRiceServiceDone = true) |
+| TC-4.44 | First tray upgrade in a service session | Shows "You can carry up to 4 cups at a time!" hint |
+| TC-4.45 | Second tray upgrade same session | Shows normal "Tray: X cups" message (hint not repeated) |
 
 ---
 
@@ -558,6 +574,7 @@ Game state persists via localStorage.
 | R6.1.6 | `deleteSave()` removes save and invalidates `hasSave()` |
 | R6.1.7 | lastPlayedTimestamp updated on each save for offline growth calculation |
 | R6.1.8 | State migration handles old save formats |
+| R6.1.9 | Persistent state includes: totalRiceServed (cumulative), firstRiceServiceDone (flag), teasServedToday (daily, reset each day) |
 
 #### Test Cases
 
@@ -622,7 +639,8 @@ Game state persists via localStorage.
 
 | ID | Requirement |
 |----|-------------|
-| R7.5.2 | Track total barley teas served in persistent game state (totalTeasServed) |
+| R7.5.2 | Track total barley teas served in persistent game state (totalTeasServed) and daily teas served (teasServedToday, reset each day) |
+| R7.5.2a | Track total barley rice served in persistent game state (totalRiceServed) and whether first rice service day is complete (firstRiceServiceDone) |
 | R7.5.3 | Milestone check runs at end of each service day (accounting phase) |
 | R7.5.4 | Congratulatory popup displayed when milestone first reached |
 | R7.5.5 | Milestone rewards applied immediately (rice inventory added, crop/recipe/stations unlocked) |
@@ -713,7 +731,7 @@ Game state persists via localStorage.
 | R9.3.4 | Oven progress bar fills during roasting; green when done, red when burned |
 | R9.3.5 | Kettle label shows state (BOIL?, percentage, cups remaining). Cooker label shows state (ingredient status, COOK?, percentage, servings remaining). |
 | R9.3.6 | Kitchen table overlays show placed items with color and short label |
-| R9.3.7 | Floating order indicators centered above tables: large "!" when seated, distinctive food icons (12px — cup shape for tea, bowl shape for rice, matching menu colors) when ordered, dirty indicators on table when dirty |
+| R9.3.7 | Floating order indicators centered above tables: large "!" when seated, distinctive food icons (12px — cup shape for tea, bowl shape for rice, matching menu colors) when ordered. When dirty: brown splatters and "Dirty" text label on table surface |
 | R9.3.8 | Yellow facing highlight on interactable tiles |
 | R9.3.9 | Boil/wash/cook/trash progress bar in HUD during active hold-space mechanics; fill is clamped to container width (never exceeds background) |
 | R9.3.10 | Held-item indicator above player: colored circle for single items, row of squares for tray or bowl stack |
@@ -783,3 +801,5 @@ Game state persists via localStorage.
 | TC-EDGE-14 | Player closes service before serving any customers | Accounting shows 0 customers, $0 revenue |
 | TC-EDGE-15 | Release Space during kettle boil, then resume | Boil progress persists; resumes on next hold |
 | TC-EDGE-16 | Exit scene while customers are mid-walk | Scene shuts down cleanly; all avatar textures cleaned up |
+| TC-EDGE-17 | Exit scene while customers are in enjoying phase | Steam timers and cup/bowl graphics cleaned up; no errors |
+| TC-EDGE-18 | Clean dirty table | "Dirty" text label removed along with splatters |

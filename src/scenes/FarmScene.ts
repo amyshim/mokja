@@ -81,6 +81,7 @@ function ty(row: number): number { return row * TILE + TILE / 2; }
 interface MenuOption {
   label: string;
   action: () => void;
+  isMessage?: boolean;
 }
 
 export class FarmScene extends Phaser.Scene {
@@ -356,7 +357,8 @@ export class FarmScene extends Phaser.Scene {
       // Nothing actionable — just info
       options.push({
         label: 'Already watered',
-        action: () => { this.showMsg('Already watered today'); },
+        action: () => {},
+        isMessage: true,
       });
     } else if (status === 'ready') {
       options.push({
@@ -382,7 +384,8 @@ export class FarmScene extends Phaser.Scene {
 
   private showMenu(options: MenuOption[]): void {
     this.menuOptions = options;
-    this.menuCursor = 0;
+    this.menuCursor = options.findIndex(o => !o.isMessage);
+    if (this.menuCursor < 0) this.menuCursor = 0;
     this.menuOpen = true;
     this.menuOptionTexts = [];
 
@@ -437,9 +440,18 @@ export class FarmScene extends Phaser.Scene {
     // Option labels
     for (let i = 0; i < options.length; i++) {
       const optY = menuY + padY + i * lineH + lineH / 2;
-      const text = this.add.text(menuX - menuW / 2 + padX + arrowW, optY, options[i].label, {
-        fontSize: '18px', fontFamily: 'monospace', color: '#4A3728',
-      }).setOrigin(0, 0.5);
+      const isMsg = options[i].isMessage;
+      const text = this.add.text(
+        menuX - menuW / 2 + padX + (isMsg ? 0 : arrowW),
+        optY,
+        options[i].label,
+        {
+          fontSize: '18px',
+          fontFamily: 'monospace',
+          color: isMsg ? '#9E8E7E' : '#4A3728',
+          fontStyle: isMsg ? 'italic' : 'normal',
+        },
+      ).setOrigin(0, 0.5);
       this.menuOptionTexts.push(text);
       this.menuContainer.add(text);
     }
@@ -460,13 +472,23 @@ export class FarmScene extends Phaser.Scene {
 
   private menuUp = (): void => {
     if (!this.menuOpen) return;
-    this.menuCursor = (this.menuCursor - 1 + this.menuOptions.length) % this.menuOptions.length;
+    const n = this.menuOptions.length;
+    let next = (this.menuCursor - 1 + n) % n;
+    while (this.menuOptions[next].isMessage && next !== this.menuCursor) {
+      next = (next - 1 + n) % n;
+    }
+    this.menuCursor = next;
     this.updateMenuArrow();
   };
 
   private menuDown = (): void => {
     if (!this.menuOpen) return;
-    this.menuCursor = (this.menuCursor + 1) % this.menuOptions.length;
+    const n = this.menuOptions.length;
+    let next = (this.menuCursor + 1) % n;
+    while (this.menuOptions[next].isMessage && next !== this.menuCursor) {
+      next = (next + 1) % n;
+    }
+    this.menuCursor = next;
     this.updateMenuArrow();
   };
 
@@ -477,8 +499,9 @@ export class FarmScene extends Phaser.Scene {
     const arrowY = this.menuOriginY + padY + this.menuCursor * lineH + lineH / 2;
     this.menuArrow.setY(arrowY);
 
-    // Highlight selected option
+    // Highlight selected option (messages stay muted)
     for (let i = 0; i < this.menuOptionTexts.length; i++) {
+      if (this.menuOptions[i]?.isMessage) continue;
       this.menuOptionTexts[i].setColor(i === this.menuCursor ? '#8B6914' : '#4A3728');
     }
   }

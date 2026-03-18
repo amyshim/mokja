@@ -177,6 +177,11 @@ export class AccountingScene extends Phaser.Scene {
   private startNextDay(): void {
     const state = GameState.getInstance();
 
+    // Mark first rice service day as done if barley rice was served
+    if (!state.data.firstRiceServiceDone && state.data.totalRiceServed > 0) {
+      state.data.firstRiceServiceDone = true;
+    }
+
     // Advance day
     state.data.day++;
 

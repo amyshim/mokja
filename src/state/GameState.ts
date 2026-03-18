@@ -23,7 +23,7 @@ export interface TableData {
   dirty: boolean;
 }
 
-export type CustomerStatus = 'walking' | 'seated' | 'ordered' | 'served';
+export type CustomerStatus = 'walking' | 'seated' | 'ordered' | 'enjoying' | 'served';
 
 export interface CustomerData {
   id: string;
@@ -38,6 +38,7 @@ export interface CustomerData {
 export interface DayResults {
   revenue: number;
   customersServed: number;
+  teasServedToday: number;
 }
 
 export interface MilestoneData {
@@ -57,6 +58,8 @@ export interface GameStateData {
   dayResults: DayResults;
   lastPlayedTimestamp: number;
   totalTeasServed: number;
+  totalRiceServed: number;
+  firstRiceServiceDone: boolean;
   milestones: MilestoneData;
   unlockedCrops: string[];
   unlockedRecipes: string[];
@@ -93,9 +96,11 @@ function createDefaultState(): GameStateData {
       })),
       customers: [],
     },
-    dayResults: { revenue: 0, customersServed: 0 },
+    dayResults: { revenue: 0, customersServed: 0, teasServedToday: 0 },
     lastPlayedTimestamp: Date.now(),
     totalTeasServed: 0,
+    totalRiceServed: 0,
+    firstRiceServiceDone: false,
     milestones: { firstMilestone: false },
     unlockedCrops: ['barley'],
     unlockedRecipes: ['barley_tea'],

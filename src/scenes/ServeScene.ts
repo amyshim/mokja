@@ -265,6 +265,11 @@ export class ServeScene extends Phaser.Scene {
 
   // Dirty table indicators (on the table tile)
   private dirtyIndicators: Map<number, Phaser.GameObjects.Graphics> = new Map();
+  private dirtyLabels: Map<number, Phaser.GameObjects.Text> = new Map();
+
+  // Enjoying phase: timers and visuals per customer
+  private enjoyingSteam: Map<string, Phaser.Time.TimerEvent[]> = new Map();
+  private enjoyingCups: Map<string, Phaser.GameObjects.Graphics> = new Map();
 
   // Station overlays
   private ovenOverlay!: Phaser.GameObjects.Rectangle;
@@ -311,6 +316,9 @@ export class ServeScene extends Phaser.Scene {
   private isHoldingSink = false;
   private isHoldingTrash = false;
 
+  // One-time tray hint
+  private shownTrayHint = false;
+
   // Customer spawning
   private spawnedCount = 0;
 
@@ -355,6 +363,10 @@ export class ServeScene extends Phaser.Scene {
     this.customerAvatars.clear();
     this.orderIndicators.clear();
     this.dirtyIndicators.clear();
+    this.dirtyLabels.clear();
+    this.enjoyingSteam.clear();
+    this.enjoyingCups.clear();
+    this.shownTrayHint = false;
     this.ktableOverlays = [];
     this.ktableLabels = [];
 
@@ -723,9 +735,7 @@ export class ServeScene extends Phaser.Scene {
           if (result.allDone) {
             this.showMsg(`Served ${recipe?.name}! +$${result.revenue}`);
             this.removeOrderIndicator(customer.id);
-            this.startCustomerWalkOut(customer.id);
-            ServingSystem.vacateTable(tableId);
-            this.checkServiceDone();
+            this.startEnjoyingPhase(customer.id, tableId);
           } else {
             this.showMsg(`Served 1 ${recipe?.name} (+$${result.revenue}) — ${remaining} more`);
           }
@@ -818,7 +828,12 @@ export class ServeScene extends Phaser.Scene {
         err = CookingSystem.interactCups();
         if (!err) {
           if (CookingSystem.heldItem === 'tray') {
-            this.showMsg(`Tray: ${CookingSystem.trayTotal} cups`);
+            if (!this.shownTrayHint) {
+              this.shownTrayHint = true;
+              this.showMsg('You can carry up to 4 cups at a time!');
+            } else {
+              this.showMsg(`Tray: ${CookingSystem.trayTotal} cups`);
+            }
           } else {
             this.showMsg('Picked up empty cup');
           }
@@ -1030,8 +1045,8 @@ export class ServeScene extends Phaser.Scene {
     const state = GameState.getInstance();
 
     for (const customer of state.data.restaurant.customers) {
-      // Skip walking and served customers
-      if (customer.status === 'walking' || customer.status === 'served') {
+      // Skip walking, enjoying, and served customers
+      if (customer.status === 'walking' || customer.status === 'enjoying' || customer.status === 'served') {
         // Remove indicator if exists
         if (this.orderIndicators.has(customer.id)) {
           this.removeOrderIndicator(customer.id);
@@ -1163,14 +1178,24 @@ export class ServeScene extends Phaser.Scene {
           gfx.fillCircle(midX - 9, midY - 5, 6);
           gfx.fillCircle(midX + 8, midY + 3, 5);
           gfx.fillCircle(midX - 3, midY + 6, 5);
-          // "DIRTY" text label
+          // "Dirty" text label
           gfx.fillStyle(0x5A3A0A, 0.8);
           gfx.fillRoundedRect(midX - 27, midY - 18, 54, 18, 3);
+          if (!this.dirtyLabels.has(table.id)) {
+            const label = this.add.text(midX, midY - 9, 'Dirty', {
+              fontSize: '12px', fontFamily: 'monospace', color: '#FFF8E7',
+            }).setOrigin(0.5, 0.5).setDepth(21);
+            this.dirtyLabels.set(table.id, label);
+          }
         }
       } else {
         if (this.dirtyIndicators.has(table.id)) {
           this.dirtyIndicators.get(table.id)!.destroy();
           this.dirtyIndicators.delete(table.id);
+        }
+        if (this.dirtyLabels.has(table.id)) {
+          this.dirtyLabels.get(table.id)!.destroy();
+          this.dirtyLabels.delete(table.id);
         }
       }
     }
@@ -1326,6 +1351,23 @@ export class ServeScene extends Phaser.Scene {
   // ============================
 
   private scheduleNextSpawn(): void {
+    const state = GameState.getInstance();
+
+    // Before rice is unlocked, stop spawning after 10 teas served today
+    if (!state.data.milestones.firstMilestone
+      && state.data.dayResults.teasServedToday >= 10) {
+      this.checkServiceDone();
+      return;
+    }
+
+    // On the first day barley rice is served, stop spawning after 10 rice servings
+    if (!state.data.firstRiceServiceDone
+      && state.data.menu.some(m => m.recipeId === 'barley_rice')
+      && state.data.totalRiceServed >= 10) {
+      this.checkServiceDone();
+      return;
+    }
+
     if (!RecipeSystem.canFulfillAnyMenuItem()) {
       this.checkServiceDone();
       return;
@@ -1529,6 +1571,146 @@ export class ServeScene extends Phaser.Scene {
         this.walkStep(sprite, textureBaseKey, path, stepIndex + 1, onComplete);
       },
     });
+  }
+
+  private startEnjoyingPhase(customerId: string, tableId: number): void {
+    const lingerMs = Phaser.Math.Between(5000, 10000);
+    const state = GameState.getInstance();
+    const customer = state.data.restaurant.customers.find(c => c.id === customerId);
+    const numServings = customer ? customer.servingsNeeded : 1;
+    const isRice = customer?.orderedRecipeId === 'barley_rice';
+
+    const tableDef = TABLE_TILES.find(t => t.tableId === tableId);
+    if (tableDef) {
+      const midX = (tx(tableDef.cols[0]) + tx(tableDef.cols[1])) / 2;
+      const tableY = ty(tableDef.row);
+
+      // Draw cups or bowls on the table — spaced evenly
+      const itemW = isRice ? 16 : 14;
+      const itemH = isRice ? 12 : 16;
+      const itemSpacing = 26;
+      const totalW = numServings * itemSpacing;
+      const gfx = this.add.graphics().setDepth(22);
+      const itemPositions: { x: number; y: number }[] = [];
+
+      for (let i = 0; i < numServings; i++) {
+        const cx = midX - totalW / 2 + itemSpacing / 2 + i * itemSpacing;
+        const cy = tableY;
+        itemPositions.push({ x: cx, y: cy });
+
+        if (isRice) {
+          // Bowl — trapezoid body with elliptical rim
+          const rimW = 18;
+          const rimH = 8;
+          const baseW = 10;
+          const bowlDepth = 10;
+          const rimY = cy - 3;
+
+          // Bowl body (trapezoid shape)
+          gfx.fillStyle(0xFFFFFF, 1);
+          gfx.beginPath();
+          gfx.moveTo(cx - rimW / 2, rimY);
+          gfx.lineTo(cx - baseW / 2, rimY + bowlDepth);
+          gfx.lineTo(cx + baseW / 2, rimY + bowlDepth);
+          gfx.lineTo(cx + rimW / 2, rimY);
+          gfx.closePath();
+          gfx.fillPath();
+          // Bowl body outline
+          gfx.lineStyle(2, 0x4A3728, 1);
+          gfx.beginPath();
+          gfx.moveTo(cx - rimW / 2, rimY);
+          gfx.lineTo(cx - baseW / 2, rimY + bowlDepth);
+          gfx.lineTo(cx + baseW / 2, rimY + bowlDepth);
+          gfx.lineTo(cx + rimW / 2, rimY);
+          gfx.strokePath();
+
+          // Rice fill inside (ellipse at rim level)
+          gfx.fillStyle(0xF5F0E0, 1);
+          gfx.fillEllipse(cx, rimY + 1, rimW - 4, rimH - 2);
+          // Rice/barley dots
+          gfx.fillStyle(0xC8A960, 0.9);
+          gfx.fillCircle(cx - 4, rimY, 1.5);
+          gfx.fillCircle(cx + 3, rimY + 1, 1.5);
+          gfx.fillCircle(cx, rimY - 1, 1.5);
+          gfx.fillCircle(cx + 1, rimY + 2, 1);
+
+          // Rim ellipse on top
+          gfx.fillStyle(0xFFFFFF, 1);
+          gfx.lineStyle(2, 0x4A3728, 1);
+          gfx.strokeEllipse(cx, rimY, rimW, rimH);
+        } else {
+          // Cup — taller and narrower
+          gfx.fillStyle(0xFFFFFF, 1);
+          gfx.fillRoundedRect(cx - itemW / 2, cy - itemH / 2, itemW, itemH, 3);
+          gfx.lineStyle(2, 0x4A3728, 1);
+          gfx.strokeRoundedRect(cx - itemW / 2, cy - itemH / 2, itemW, itemH, 3);
+          // Tea fill
+          gfx.fillStyle(0xC8A960, 0.9);
+          gfx.fillRect(cx - itemW / 2 + 2, cy - itemH / 2 + 4, itemW - 4, itemH - 6);
+        }
+      }
+      this.enjoyingCups.set(customerId, gfx);
+
+      // Steam particles — one stream per item
+      const steamTimers: Phaser.Time.TimerEvent[] = [];
+      this.enjoyingSteam.set(customerId, steamTimers);
+
+      for (let i = 0; i < itemPositions.length; i++) {
+        const cp = itemPositions[i];
+        const steamBaseY = cp.y - itemH / 2 - 2;
+        const spawnSteam = () => {
+          if (!this.enjoyingSteam.has(customerId)) return;
+          const dot = this.add.circle(cp.x, steamBaseY, 2.5, 0xFFFFFF, 0.5).setDepth(25);
+          this.tweens.add({
+            targets: dot,
+            y: steamBaseY - 16,
+            alpha: 0,
+            duration: 1200,
+            ease: 'Sine.easeOut',
+            onComplete: () => dot.destroy(),
+          });
+        };
+
+        const initialDelay = i * 300;
+        const initTimer = this.time.delayedCall(initialDelay, () => {
+          spawnSteam();
+          const loopTimer = this.time.addEvent({
+            delay: 1500,
+            loop: true,
+            callback: spawnSteam,
+          });
+          steamTimers.push(loopTimer);
+        });
+        steamTimers.push(initTimer);
+      }
+    }
+
+    // After linger duration, transition to served and walk out
+    this.time.delayedCall(lingerMs, () => {
+      this.removeEnjoyingVisuals(customerId);
+
+      const s = GameState.getInstance();
+      const c = s.data.restaurant.customers.find(cu => cu.id === customerId);
+      if (c) c.status = 'served';
+
+      this.startCustomerWalkOut(customerId);
+      ServingSystem.vacateTable(tableId);
+      this.checkServiceDone();
+      this.scheduleNextSpawn();
+    });
+  }
+
+  private removeEnjoyingVisuals(customerId: string): void {
+    const timers = this.enjoyingSteam.get(customerId);
+    if (timers) {
+      for (const t of timers) t.destroy();
+      this.enjoyingSteam.delete(customerId);
+    }
+    const cups = this.enjoyingCups.get(customerId);
+    if (cups) {
+      cups.destroy();
+      this.enjoyingCups.delete(customerId);
+    }
   }
 
   private startCustomerWalkOut(customerId: string): void {
@@ -1765,6 +1947,9 @@ export class ServeScene extends Phaser.Scene {
                 this.hudPrompt.setText(`Need ${remaining}x ${recipe?.name}...`);
               }
             }
+              break;
+            case 'enjoying':
+              this.hudPrompt.setText('Enjoying...');
               break;
             default:
               this.hudPrompt.setText('');

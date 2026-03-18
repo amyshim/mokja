@@ -27,7 +27,7 @@ In the **farming** phase:
 * Planting does not consume inventory — seeds are unlimited (once unlocked)
 * All crops take 1 real day (24 hours, determined by device time) to grow
 * Players start with a starter inventory of 5 barley (already grown)
-* Watering increases crop yield by 2x (limited efficacy: one water per crop per day. Additional watering will yield no further change)
+* Watering increases crop yield by 2x (limited efficacy: one water per crop per day). If a crop has already been watered, the contextual menu shows "Already watered" as a non-selectable message (muted, italic) rather than an actionable option
 * *Future: Players can re-arrange (dig and replant) their farming plot as aesthetically desired*
 
 In the **menu setting** phase:
@@ -49,8 +49,8 @@ In the **serving** phase:
 * New customers only arrive when the restaurant has enough ingredients to fulfill at least one menu item
 * The player takes the customer's order by walking to the table and pressing Space. The entire group orders at once (one dish per person). For a group of 2, this means 2 servings are needed. Customers can only order food that the restaurant has enough ingredients to fulfill. If ingredients run out after a customer is seated but before ordering, the customer leaves
 * Serving is done one portion at a time. For a group of 2, the player must deliver 2 barley teas. The group only leaves after all servings are delivered.
-* After being fully served (or leaving), customer avatars walk back to the entrance and exit the restaurant
-* **Order indicators**: A floating speech bubble appears centered above each occupied table. When customers are seated and ready to order, a large "!" icon appears. After ordering, distinctive food icons appear showing remaining servings needed — cups with steam for barley tea, bowls with rice dots for barley rice. Icons are sized (12px) to be clearly recognizable and use the same colors as the menu cards. When the table is dirty after customers leave, dirty indicators appear on the table surface.
+* After being fully served, customers enter an "enjoying" phase where they stay seated for 5-10 seconds (randomized per group). During this phase, cups (for barley tea) or bowls (for barley rice) appear on the table — one per serving ordered — with small steam particles rising from each. After the enjoying phase ends (or if customers leave without ordering), customer avatars walk back to the entrance and exit the restaurant. The table remains occupied during the enjoying phase.
+* **Order indicators**: A floating speech bubble appears centered above each occupied table. When customers are seated and ready to order, a large "!" icon appears. After ordering, distinctive food icons appear showing remaining servings needed — cups with steam for barley tea, bowls with rice dots for barley rice. Icons are sized (12px) to be clearly recognizable and use the same colors as the menu cards. When the table is dirty after customers leave, dirty indicators (brown splatters and a "Dirty" text label) appear on the table surface.
 
 * Players cook and prepare food in the kitchen area. Food can be made any time, even if a customer has not yet ordered.
 * The kitchen area functions like the game Overcooked.
@@ -72,11 +72,13 @@ In the **serving** phase:
   * There are **kitchen tables** (4 surfaces). These can be used to place and stage prepared items. For example, a player can pre-make barley tea and store cups on kitchen tables before customers order.
 * Before rice is unlocked, tiles for locked stations (rice bin, rice cooker, bowl station, sink) are walkable floor — no invisible walls.
 * The player carries one item at a time: barley, washed barley, roasted barley, empty cup, barley tea, rice, washed rice, bowl, or barley rice.
-* **Tray mechanic**: Players can optionally carry multiple cups on a tray. Picking up a second cup from cup storage while already holding a cup or tea upgrades to a tray (max 4 slots). The tray holds a mix of empty cups and filled barley tea. Players fill tray cups one at a time at the hot kettle without needing to set the tray down. Serving one customer removes one filled cup from the tray. When the tray is emptied completely, hands become free.
+* **Tray mechanic**: Players can optionally carry multiple cups on a tray. Picking up a second cup from cup storage while already holding a cup or tea upgrades to a tray (max 4 slots). The first time the tray upgrade triggers each service session, a hint message ("You can carry up to 4 cups at a time!") is shown. The tray holds a mix of empty cups and filled barley tea. Players fill tray cups one at a time at the hot kettle without needing to set the tray down. Serving one customer removes one filled cup from the tray. When the tray is emptied completely, hands become free.
 * **Bowl stack mechanic**: Players can optionally carry multiple bowls in a stack. Picking up a second bowl from the bowl station while already holding a bowl or barley rice upgrades to a stack (max 4 slots). The stack holds a mix of empty bowls and filled barley rice. Players fill stack bowls one at a time at the rice cooker without needing to set the stack down. Serving one customer removes one filled bowl from the stack. When the stack is emptied completely, hands become free.
 * The player sprite displays a small visual indicator above the character showing the currently held item. Single items show as a colored circle (6px). Trays show a row of small squares — gold for filled tea, white for empty cups. Bowl stacks show a row of small squares — brown for filled barley rice, gray for empty bowls.
 * Players bring prepared barley tea (single or from tray) to an ordered customer's table to serve them.
 
+* Before rice is unlocked, no new customers arrive after 10 barley teas have been served that day. This applies every service day until the milestone is reached, preventing inventory depletion while guiding players toward the unlock. Customers already seated are still served.
+* On the first day barley rice is served, no new customers arrive after 10 barley rice servings have been delivered. Same behavior — seated customers are still served.
 * The "Close Service" button appears after all customers are served
 * *Future: In advanced levels, players can hire servers and cooks to do this phase idly if desired*
 
